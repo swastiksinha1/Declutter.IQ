@@ -7,7 +7,6 @@ import {
 import MemoryGame from '../components/MemoryGame';
 import TiltCard from '../components/TiltCard';
 import ScanVisualizer from '../components/ScanVisualizer';
-import DashboardBackground from '../components/DashboardBackground';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -378,7 +377,6 @@ export default function Dashboard() {
 
   return (
     <>
-      <DashboardBackground />
       <div className="app-layout fade-in">
       
       {toast && (
