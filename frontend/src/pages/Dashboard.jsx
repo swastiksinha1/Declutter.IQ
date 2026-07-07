@@ -491,7 +491,7 @@ export default function Dashboard() {
             <div style={{ textAlign: 'center' }}>
               <h2 style={{ fontSize: '2.5rem', marginBottom: '1rem', fontWeight: 700 }}>Intelligent System Declutter</h2>
               <p style={{ color: 'var(--text-muted)', fontSize: '1.2rem', maxWidth: '700px', margin: '0 auto', lineHeight: 1.6 }}>
-                Select a directory above and run a Deep AI Scan to instantly reclaim gigabytes of wasted storage space with zero risk of losing your original files.
+                First, select a directory and run a <strong>Scan Path</strong> to analyze your storage. Then, unlock the <strong>Deep AI Scan</strong> to find visually identical images using machine learning—with zero risk of losing your original files.
               </p>
             </div>
 
