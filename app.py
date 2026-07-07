@@ -234,5 +234,40 @@ def prune_execute():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/default-directory', methods=['GET'])
+def default_directory():
+    try:
+        if os.name == 'nt':
+            import winreg
+            sub_key = r'SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders'
+            downloads_guid = '{374DE290-123F-4565-9164-39C4925E467B}'
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, sub_key) as key:
+                location = winreg.QueryValueEx(key, downloads_guid)[0]
+            return jsonify({"directory": location})
+        else:
+            return jsonify({"directory": os.path.join(os.path.expanduser('~'), 'Downloads')})
+    except Exception as e:
+        return jsonify({"directory": os.path.join(os.path.expanduser('~'), 'Downloads')})
+
+@app.route('/api/rename', methods=['POST'])
+def rename_file():
+    data = request.json
+    filepath = data.get('path')
+    new_name = data.get('new_name')
+    if not filepath or not new_name:
+        return jsonify({"error": "path and new_name are required"}), 400
+        
+    try:
+        dir_name = os.path.dirname(filepath)
+        new_filepath = os.path.join(dir_name, new_name)
+        
+        if os.path.exists(new_filepath):
+            return jsonify({"error": "A file with that name already exists"}), 400
+            
+        os.rename(filepath, new_filepath)
+        return jsonify({"status": "success", "new_path": new_filepath})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

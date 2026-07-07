@@ -43,6 +43,9 @@ function App() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [toast, setToast] = useState('');
   const [previewFile, setPreviewFile] = useState(null);
+  const [renameTarget, setRenameTarget] = useState(null);
+  const [newName, setNewName] = useState('');
+  const [isRenaming, setIsRenaming] = useState(false);
   
   // Feature States
   const [zombies, setZombies] = useState(null);
@@ -259,6 +262,28 @@ function App() {
     } finally { setIsPruning(false); }
   };
 
+  const handleRenameSubmit = async () => {
+    if (!renameTarget || !newName) return;
+    setIsRenaming(true);
+    try {
+      const res = await fetch('http://127.0.0.1:5000/api/rename', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ path: renameTarget.path, new_name: newName })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      
+      showToast(`Successfully renamed to ${newName}`);
+      setRenameTarget(null);
+      setNewName('');
+      handleScan();
+    } catch (err) {
+      alert("Rename Error: " + err.message);
+    } finally {
+      setIsRenaming(false);
+    }
+  };
+
   const handleZombies = async () => {
     if (!directory) return;
     setIsZombieScanning(true);
@@ -342,7 +367,7 @@ function App() {
           <span className="filepath" style={{opacity: 0.5, fontSize: '0.8rem', color: 'var(--text-muted)'}}>{f.path}</span>
         </div>
         <span style={{fontSize: '0.85rem', color: 'var(--text-muted)', marginRight: '1rem'}}>{(f.size / 1024).toFixed(1)} KB</span>
-        <button className="btn btn-ghost" style={{padding: '0.4rem 0.8rem', fontSize: '0.8rem'}} onClick={() => showToast("AI Renaming coming soon!")}>
+        <button className="btn btn-ghost" style={{padding: '0.4rem 0.8rem', fontSize: '0.8rem'}} onClick={() => { setRenameTarget(f); setNewName(f.filename); }}>
           <Sparkles size={14} style={{color: '#9d4edd'}} /> Rename
         </button>
       </li>
@@ -747,6 +772,44 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* Rename Modal */}
+      <AnimatePresence>
+        {renameTarget && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="game-overlay" onClick={() => setRenameTarget(null)}
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
+              className="glass-panel" style={{maxWidth: '420px', width: '90%'}} onClick={e => e.stopPropagation()}
+            >
+              <h3 style={{marginTop: 0, color: 'var(--brand-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                <Sparkles size={20} /> Rename File
+              </h3>
+              <p style={{color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem', wordBreak: 'break-all'}}>
+                {renameTarget.path}
+              </p>
+              
+              <input 
+                type="text" 
+                value={newName} 
+                onChange={(e) => setNewName(e.target.value)}
+                className="dir-input"
+                style={{ width: '100%', marginBottom: '2rem' }}
+                autoFocus
+              />
+              
+              <div style={{display: 'flex', gap: '1rem', justifyContent: 'flex-end'}}>
+                <button className="btn btn-ghost" onClick={() => setRenameTarget(null)} disabled={isRenaming}>Cancel</button>
+                <button className="btn btn-primary" onClick={handleRenameSubmit} disabled={isRenaming || !newName || newName === renameTarget.filename}>
+                  {isRenaming ? <Loader size={16} className="spin-slow" /> : 'Rename File'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
     </>
