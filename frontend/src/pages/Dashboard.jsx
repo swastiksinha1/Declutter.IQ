@@ -5,6 +5,8 @@ import {
   Cloud, Sparkles, FolderMinus, Loader, AlertTriangle, ChevronDown, ChevronUp, Wand2
 } from 'lucide-react';
 import MemoryGame from '../components/MemoryGame';
+import TiltCard from '../components/TiltCard';
+import ScanVisualizer from '../components/ScanVisualizer';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -472,7 +474,13 @@ export default function Dashboard() {
         </div>
 
         {/* Dashboard View */}
-        {activeNav === 'dashboard' && scanResult && (
+        {activeNav === 'dashboard' && (isScanning || isSemanticScanning) && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fade-in">
+             <ScanVisualizer isSemantic={isSemanticScanning} />
+          </motion.div>
+        )}
+
+        {activeNav === 'dashboard' && scanResult && !isScanning && !isSemanticScanning && (
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -489,7 +497,7 @@ export default function Dashboard() {
 
             <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
               {/* Left Column: Chart */}
-              <div className="glass-panel" style={{ flex: '2', minWidth: '400px', display: 'flex', flexDirection: 'column' }}>
+              <TiltCard className="glass-panel" style={{ flex: '2', minWidth: '400px', display: 'flex', flexDirection: 'column' }}>
                 <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: 500 }}>Space Analysis</h3>
                 <div style={{ height: '320px', flexGrow: 1, position: 'relative' }}>
                   <ResponsiveContainer width="100%" height="100%">
@@ -509,28 +517,28 @@ export default function Dashboard() {
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
-              </div>
+              </TiltCard>
 
               {/* Right Column: Stats Grid */}
               <div style={{ flex: '1', minWidth: '300px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1.5rem', alignContent: 'start' }}>
-                <div className="stat-card" style={{ padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
+                <TiltCard className="stat-card" style={{ padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
                   <h3 style={{fontSize: '0.8rem'}}>Reclaimable</h3>
                   <p className="stat-value highlight" style={{ fontSize: '1.8rem' }}>
                     {(scanResult.analytics.reclaimable_space_bytes / (1024 * 1024)).toFixed(1)}<span style={{fontSize: '0.9rem', marginLeft: '4px'}}>MB</span>
                   </p>
-                </div>
-                <div className="stat-card" style={{ padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
+                </TiltCard>
+                <TiltCard className="stat-card" style={{ padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
                   <h3 style={{fontSize: '0.8rem'}}>Total Files</h3>
                   <p className="stat-value" style={{ fontSize: '1.8rem' }}>{scanResult.analytics.total_files.toLocaleString()}</p>
-                </div>
-                <div className="stat-card" style={{ padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
+                </TiltCard>
+                <TiltCard className="stat-card" style={{ padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
                   <h3 style={{fontSize: '0.8rem'}}>Exact Dupes</h3>
                   <p className="stat-value" style={{ fontSize: '1.8rem' }}>{scanResult.analytics.duplicate_groups_count}</p>
-                </div>
-                <div className="stat-card" style={{ padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
+                </TiltCard>
+                <TiltCard className="stat-card" style={{ padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
                   <h3 style={{fontSize: '0.8rem'}}>Visual Dupes</h3>
                   <p className="stat-value" style={{ fontSize: '1.8rem' }}>{scanResult.analytics.near_duplicate_groups_count}</p>
-                </div>
+                </TiltCard>
               </div>
             </div>
           </motion.div>
