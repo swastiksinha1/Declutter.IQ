@@ -8,6 +8,7 @@ def get_file_metadata(filepath):
             "filename": os.path.basename(filepath),
             "size": stat.st_size,
             "modified_time": stat.st_mtime,
+            "access_time": getattr(stat, 'st_atime', stat.st_mtime),
             "extension": os.path.splitext(filepath)[1].lower()
         }
     except Exception:

@@ -1,13 +1,32 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { 
-  FolderSearch, LayoutDashboard, Copy, Settings, 
-  Trash2, Search, Brain, Image as ImageIcon, FileText, CheckCircle 
+  LayoutDashboard, Copy, Settings, Trash2, Search, Brain, 
+  ImageIcon, FileText, CheckCircle, FolderTree, Ghost, 
+  Cloud, Sparkles, FolderMinus 
 } from 'lucide-react';
 import MemoryGame from './components/MemoryGame';
+import FluidBackground from './components/FluidBackground';
 
 function App() {
   const [activeNav, setActiveNav] = useState('dashboard');
-  const [directory, setDirectory] = useState('C:\\Users\\swast\\Downloads');
+  const [directory, setDirectory] = useState('');
+  const [defaultDir, setDefaultDir] = useState('');
+  
+  useEffect(() => {
+    const fetchDefaultDir = async () => {
+      try {
+        const response = await fetch('http://127.0.0.1:5000/api/default-directory');
+        const data = await response.json();
+        if (data.status === 'success' && data.directory) {
+          setDirectory(data.directory);
+          setDefaultDir(data.directory);
+        }
+      } catch (err) {
+        console.error("Failed to fetch default directory", err);
+      }
+    };
+    fetchDefaultDir();
+  }, []);
   
   // States
   const [isScanning, setIsScanning] = useState(false);
@@ -22,6 +41,16 @@ function App() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [toast, setToast] = useState('');
   const [previewFile, setPreviewFile] = useState(null);
+  
+  // Feature States
+  const [zombies, setZombies] = useState(null);
+  const [categorizeResult, setCategorizeResult] = useState(null);
+  const [categorizePlan, setCategorizePlan] = useState(null);
+  const [prunePlan, setPrunePlan] = useState(null);
+  
+  const [isCategorizing, setIsCategorizing] = useState(false);
+  const [isPruning, setIsPruning] = useState(false);
+  const [isZombieScanning, setIsZombieScanning] = useState(false);
 
   const handleScan = async () => {
     if (!directory) return;
@@ -57,7 +86,7 @@ function App() {
 
   const handleSemanticScan = async () => {
     if (!directory) return;
-    setIsSemanticScanning(true); // Triggers Memory Game Overlay
+    setIsSemanticScanning(true);
     setError('');
     
     try {
@@ -81,7 +110,7 @@ function App() {
     } catch (err) {
       setError("AI Scan Error: " + err.message);
     } finally {
-      setIsSemanticScanning(false); // Closes Memory Game Overlay
+      setIsSemanticScanning(false);
     }
   };
 
@@ -139,9 +168,98 @@ function App() {
     }
   };
 
-  // --------------------------------------------------------
-  // REUSABLE COMPONENTS
-  // --------------------------------------------------------
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(''), 5000);
+  };
+  
+  const handleCategorizePreview = async () => {
+    if (!directory) return;
+    setIsCategorizing(true);
+    setCategorizeResult(null);
+    setCategorizePlan(null);
+    try {
+      const res = await fetch('http://127.0.0.1:5000/api/categorize/preview', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({directory})
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      if (data.plan.length === 0) {
+        showToast("No loose files found to categorize!");
+      } else {
+        setCategorizePlan(data.plan);
+      }
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally { setIsCategorizing(false); }
+  };
+
+  const handleCategorizeExecute = async () => {
+    setIsCategorizing(true);
+    try {
+      const res = await fetch('http://127.0.0.1:5000/api/categorize/execute', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({plan: categorizePlan})
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setCategorizePlan(null);
+      setCategorizeResult(data);
+      showToast(`Success! Organized ${data.moved_count} loose files.`);
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally { setIsCategorizing(false); }
+  };
+
+  const handlePrunePreview = async () => {
+    if (!directory) return;
+    setIsPruning(true);
+    setPrunePlan(null);
+    try {
+      const res = await fetch('http://127.0.0.1:5000/api/prune/preview', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({directory})
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      if (data.plan.length === 0) {
+        showToast("No empty folders found!");
+      } else {
+        setPrunePlan(data.plan);
+      }
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally { setIsPruning(false); }
+  };
+
+  const handlePruneExecute = async () => {
+    setIsPruning(true);
+    try {
+      const res = await fetch('http://127.0.0.1:5000/api/prune/execute', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({plan: prunePlan})
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setPrunePlan(null);
+      showToast(`Cleaned up ${data.pruned_count} completely empty folders.`);
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally { setIsPruning(false); }
+  };
+
+  const handleZombies = async () => {
+    if (!directory) return;
+    setIsZombieScanning(true);
+    try {
+      const res = await fetch('http://127.0.0.1:5000/api/zombies', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({directory})
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setZombies(data.zombies);
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally { setIsZombieScanning(false); }
+  };
+
   const FileItem = ({ f }) => {
     const isImg = ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif'].includes(f.extension?.toLowerCase());
     return (
@@ -150,66 +268,63 @@ function App() {
           type="checkbox" 
           checked={selectedFiles.has(f.path)} 
           onChange={() => toggleSelection(f.path)}
-          style={{width: '18px', height: '18px', cursor: 'pointer', margin: 0}}
+          style={{width: '18px', height: '18px', cursor: 'pointer', margin: 0, accentColor: 'var(--brand-primary)'}}
         />
         {isImg && (
           <img 
             src={`http://127.0.0.1:5000/api/file?path=${encodeURIComponent(f.path)}`} 
             alt={f.filename} 
-            style={{width: '40px', height: '40px', objectFit: 'cover', borderRadius: '6px', marginLeft: '1rem', cursor: 'pointer'}} 
+            style={{width: '44px', height: '44px', objectFit: 'cover', borderRadius: '8px', marginLeft: '1rem', cursor: 'pointer', border: '1px solid var(--border-light)'}} 
             onClick={() => setPreviewFile(f)}
           />
         )}
         <div className="file-info" style={{marginLeft: '1rem', flex: 1}}>
           <span 
             className="filename" 
-            style={{cursor: isImg ? 'pointer' : 'default', fontWeight: '500', color: isImg ? 'var(--text-color)' : '#ddd'}} 
+            style={{cursor: isImg ? 'pointer' : 'default', fontWeight: '500', color: isImg ? 'var(--text-main)' : 'var(--text-muted)'}} 
             onClick={() => isImg ? setPreviewFile(f) : null}
           >
             {f.filename}
           </span>
           <br/>
-          <span className="filepath" style={{opacity: 0.5, fontSize: '0.8rem'}}>{f.path}</span>
+          <span className="filepath" style={{opacity: 0.5, fontSize: '0.8rem', color: 'var(--text-muted)'}}>{f.path}</span>
         </div>
-        <span style={{fontSize: '0.85rem', color: '#888', marginRight: '1rem'}}>{(f.size / 1024).toFixed(1)} KB</span>
-        {isImg && (
-          <button className="btn btn-ghost" style={{padding: '0.4rem 0.8rem', fontSize: '0.8rem'}} onClick={() => setPreviewFile(f)}>
-            View
-          </button>
-        )}
+        <span style={{fontSize: '0.85rem', color: 'var(--text-muted)', marginRight: '1rem'}}>{(f.size / 1024).toFixed(1)} KB</span>
+        <button className="btn btn-ghost" style={{padding: '0.4rem 0.8rem', fontSize: '0.8rem'}} onClick={() => showToast("AI Renaming coming soon!")}>
+          <Sparkles size={14} style={{color: '#9d4edd'}} /> Rename
+        </button>
       </li>
     );
   };
 
   return (
-    <div className="app-layout fade-in">
+    <>
+      <FluidBackground isActive={true} />
+      <div className="app-layout fade-in">
       
-      {/* Toast */}
       {toast && (
-        <div style={{position: 'fixed', top: 20, right: 20, background: 'var(--success-color)', color: 'white', padding: '1rem 2rem', borderRadius: 8, zIndex: 1000}} className="fade-in">
+        <div style={{position: 'fixed', top: 20, right: 20, background: 'var(--brand-primary)', color: 'white', padding: '1rem 2rem', borderRadius: 12, zIndex: 1000, boxShadow: '0 10px 30px rgba(94, 106, 210, 0.4)'}} className="fade-in">
           {toast}
         </div>
       )}
 
-      {/* Memory Game Loading Overlay */}
       {isSemanticScanning && (
         <div className="game-overlay fade-in">
           <MemoryGame />
         </div>
       )}
 
-      {/* Lightbox */}
       {previewFile && (
         <div className="game-overlay" onClick={() => setPreviewFile(null)}>
           <div className="fade-in" style={{position: 'relative', maxWidth: '90vw', maxHeight: '90vh'}} onClick={e => e.stopPropagation()}>
             <img 
               src={`http://127.0.0.1:5000/api/file?path=${encodeURIComponent(previewFile.path)}`} 
               alt={previewFile.filename}
-              style={{maxWidth: '100%', maxHeight: '85vh', objectFit: 'contain', borderRadius: '8px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)'}}
+              style={{maxWidth: '100%', maxHeight: '85vh', objectFit: 'contain', borderRadius: '12px', boxShadow: '0 30px 60px rgba(0,0,0,0.6)'}}
             />
             <button 
               onClick={() => setPreviewFile(null)}
-              style={{position: 'absolute', top: '-15px', right: '-15px', background: 'var(--danger-color)', color: 'white', border: 'none', borderRadius: '50%', width: '36px', height: '36px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'}}
+              style={{position: 'absolute', top: '-15px', right: '-15px', background: 'var(--danger)', color: 'white', border: 'none', borderRadius: '50%', width: '36px', height: '36px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'}}
             >
               ×
             </button>
@@ -217,75 +332,91 @@ function App() {
         </div>
       )}
 
-      {/* Sidebar Navigation */}
       <aside className="sidebar">
         <div className="sidebar-header">
-          <Brain color="#a855f7" size={28} />
+          <Sparkles color="#9d4edd" size={28} />
           <h1>Declutter.IQ</h1>
         </div>
+        
+        <div className="nav-section">Main</div>
         <div className="nav-links">
           <div className={`nav-item ${activeNav === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveNav('dashboard')}>
-            <LayoutDashboard size={20} />
-            <span>Dashboard</span>
+            <LayoutDashboard size={18} /> <span>Dashboard</span>
           </div>
           <div className={`nav-item ${activeNav === 'review' ? 'active' : ''}`} onClick={() => setActiveNav('review')}>
-            <Copy size={20} />
-            <span>Review Duplicates</span>
-            {scanResult && <div style={{marginLeft: 'auto', background: 'var(--accent-color)', color: 'white', padding: '2px 8px', borderRadius: '99px', fontSize: '0.7rem'}}>
+            <Copy size={18} /> <span>Review Duplicates</span>
+            {scanResult && <div style={{marginLeft: 'auto', background: 'var(--border-light)', color: 'var(--text-main)', padding: '2px 8px', borderRadius: '99px', fontSize: '0.7rem'}}>
               {scanResult.analytics.duplicate_groups_count + scanResult.analytics.near_duplicate_groups_count + (semanticResult ? semanticResult.semantic_duplicates.length : 0)}
             </div>}
           </div>
-          <div className={`nav-item ${activeNav === 'settings' ? 'active' : ''}`} onClick={() => setActiveNav('settings')}>
-            <Settings size={20} />
-            <span>Settings</span>
+        </div>
+
+        <div className="nav-section" style={{marginTop: '2rem'}}>Tools</div>
+        <div className="nav-links">
+          <div className={`nav-item ${activeNav === 'categorize' ? 'active' : ''}`} onClick={() => setActiveNav('categorize')}>
+            <FolderTree size={18} /> <span>Auto-Categorize</span>
+          </div>
+          <div className={`nav-item ${activeNav === 'zombies' ? 'active' : ''}`} onClick={() => setActiveNav('zombies')}>
+            <Ghost size={18} /> <span>Zombie Files</span>
+          </div>
+          <div className={`nav-item ${activeNav === 'prune' ? 'active' : ''}`} onClick={() => setActiveNav('prune')}>
+            <FolderMinus size={18} /> <span>Prune Empty Folders</span>
+          </div>
+          <div className={`nav-item ${activeNav === 'cloud' ? 'active' : ''}`} onClick={() => setActiveNav('cloud')}>
+            <Cloud size={18} /> <span>Cloud Drive</span>
           </div>
         </div>
       </aside>
 
-      {/* Main Content Area */}
       <main className="main-content">
-        <div className="glass-panel" style={{marginBottom: '2rem'}}>
+        <div className="glass-panel" style={{marginBottom: '3rem'}}>
           <div className="scan-bar">
             <input 
               type="text" 
-              placeholder="Enter directory (e.g. C:\Users\swast\Downloads)" 
+              placeholder="Enter directory (e.g. C:\\Users\\Username\\Downloads)" 
               value={directory}
               onChange={(e) => setDirectory(e.target.value)}
               className="dir-input"
             />
             <button className="btn btn-primary" onClick={handleScan} disabled={isScanning || isSemanticScanning}>
               <Search size={18} />
-              {isScanning ? 'Scanning...' : 'Scan Now'}
+              {isScanning ? 'Scanning...' : 'Scan Path'}
             </button>
             <button className="btn btn-magic" onClick={handleSemanticScan} disabled={isScanning || isSemanticScanning || !scanResult}>
               <Brain size={18} />
               Deep AI Scan
             </button>
           </div>
-          {error && <div style={{color: 'var(--danger-color)', marginTop: '1rem'}}>{error}</div>}
+          {directory && defaultDir && directory === defaultDir && (
+            <div style={{fontSize: '0.85rem', color: 'var(--text)', opacity: 0.7, marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem'}}>
+              <Sparkles size={14} style={{color: 'var(--primary)'}} /> 
+              <span>Auto-detected your system's default Downloads folder as the most common source of clutter.</span>
+            </div>
+          )}
+          {error && <div style={{color: 'var(--danger)', marginTop: '1rem', fontWeight: 500}}>{error}</div>}
         </div>
 
         {/* Dashboard View */}
         {activeNav === 'dashboard' && scanResult && (
           <div className="fade-in">
-            <h2 style={{fontWeight: 600, margin: '0 0 1.5rem 0'}}>Storage Overview</h2>
+            <h2>Storage Overview</h2>
             <div className="stat-grid">
               <div className="stat-card">
-                <h3>Total Files Scanned</h3>
+                <h3>Total Files</h3>
                 <p className="stat-value">{scanResult.analytics.total_files.toLocaleString()}</p>
               </div>
               <div className="stat-card">
-                <h3>Max Reclaimable</h3>
+                <h3>Reclaimable Space</h3>
                 <p className="stat-value highlight">
                   {(scanResult.analytics.reclaimable_space_bytes / (1024 * 1024)).toFixed(2)} MB
                 </p>
               </div>
               <div className="stat-card">
-                <h3>Exact Duplicates</h3>
+                <h3>Exact Dupes</h3>
                 <p className="stat-value">{scanResult.analytics.duplicate_groups_count}</p>
               </div>
               <div className="stat-card">
-                <h3>Visual Matches</h3>
+                <h3>Visual Dupes</h3>
                 <p className="stat-value">{scanResult.analytics.near_duplicate_groups_count}</p>
               </div>
             </div>
@@ -295,19 +426,18 @@ function App() {
         {/* Review Duplicates View */}
         {activeNav === 'review' && scanResult && (
           <div className="fade-in">
-            <h2 style={{fontWeight: 600, margin: '0 0 1.5rem 0'}}>Review & Clean</h2>
+            <h2>Review & Clean</h2>
             
-            {/* AI Semantic Matches */}
             {semanticResult && semanticResult.semantic_duplicates.length > 0 && (
               <div style={{marginBottom: '3rem'}}>
-                <h3 style={{display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#ec4899'}}>
+                <h3 style={{display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#9d4edd'}}>
                   <Brain size={20} /> AI Conceptual Matches
                 </h3>
                 {semanticResult.semantic_duplicates.map((group, idx) => (
-                  <div key={idx} className="duplicate-group" style={{borderLeft: '3px solid #ec4899'}}>
+                  <div key={idx} className="duplicate-group" style={{borderLeft: '4px solid #9d4edd'}}>
                     <div className="group-header">
                       <h4>{group.description}</h4>
-                      <span className="badge" style={{background: 'rgba(236, 72, 153, 0.2)', color: '#fbcfe8'}}>
+                      <span className="badge" style={{background: 'rgba(157, 78, 221, 0.2)', color: '#d8b4fe'}}>
                         {(group.redundant_space / (1024 * 1024)).toFixed(2)} MB
                       </span>
                     </div>
@@ -319,17 +449,18 @@ function App() {
               </div>
             )}
 
-            {/* Visual Matches */}
             {scanResult.near_duplicates.length > 0 && (
               <div style={{marginBottom: '3rem'}}>
-                <h3 style={{display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#8b5cf6'}}>
+                <h3 style={{display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#5e6ad2'}}>
                   <ImageIcon size={20} /> Visually Similar Images
                 </h3>
                 {scanResult.near_duplicates.map((group, idx) => (
-                  <div key={idx} className="duplicate-group" style={{borderLeft: '3px solid #8b5cf6'}}>
+                  <div key={idx} className="duplicate-group" style={{borderLeft: '4px solid #5e6ad2'}}>
                     <div className="group-header">
                       <h4>Visual Group {idx + 1}</h4>
-                      <span className="badge">{(group.redundant_space / (1024 * 1024)).toFixed(2)} MB</span>
+                      <span className="badge" style={{background: 'rgba(94, 106, 210, 0.2)', color: '#a5b4fc'}}>
+                        {(group.redundant_space / (1024 * 1024)).toFixed(2)} MB
+                      </span>
                     </div>
                     <ul className="file-list">
                       {group.files.map((f, i) => <FileItem key={i} f={f} />)}
@@ -339,17 +470,16 @@ function App() {
               </div>
             )}
 
-            {/* Exact Matches */}
             {scanResult.duplicates.length > 0 && (
               <div>
-                <h3 style={{display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#a1a1aa'}}>
+                <h3 style={{display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)'}}>
                   <FileText size={20} /> Exact Duplicates
                 </h3>
                 {scanResult.duplicates.map((group, idx) => (
                   <div key={idx} className="duplicate-group">
                     <div className="group-header">
-                      <h4 style={{color: '#a1a1aa'}}>Hash: {group.hash.substring(0, 8)}...</h4>
-                      <span className="badge" style={{background: 'rgba(255,255,255,0.1)', color: '#d4d4d8'}}>
+                      <h4 style={{color: 'var(--text-muted)'}}>Hash: {group.hash.substring(0, 8)}...</h4>
+                      <span className="badge">
                         {(group.redundant_space / (1024 * 1024)).toFixed(2)} MB
                       </span>
                     </div>
@@ -369,31 +499,113 @@ function App() {
             )}
           </div>
         )}
+
+        {/* Feature Stubs */}
+        {activeNav === 'categorize' && (
+          <div className="fade-in glass-panel" style={{textAlign: 'center', padding: '4rem 2rem'}}>
+            <FolderTree size={48} color="var(--brand-primary)" style={{marginBottom: '1rem'}} />
+            <h2>Smart Auto-Categorization</h2>
+            <p style={{color: 'var(--text-muted)', maxWidth: '500px', margin: '0 auto 2rem auto'}}>
+              Automatically sort loose files into organized directories based on extensions.
+            </p>
+            <button className="btn btn-primary" style={{margin: '0 auto'}} onClick={handleCategorizePreview} disabled={isCategorizing}>
+              {isCategorizing ? 'Scanning...' : 'Preview Categorization'}
+            </button>
+            
+            {categorizeResult && categorizeResult.moved_count > 0 && (
+              <div className="fade-in" style={{textAlign: 'left', marginTop: '3rem', background: 'rgba(0,0,0,0.2)', padding: '2rem', borderRadius: '16px'}}>
+                <h3 style={{marginTop: 0}}>Categorization Results</h3>
+                <p style={{color: 'var(--success)'}}>Successfully moved {categorizeResult.moved_count} files.</p>
+                {Object.entries(categorizeResult.details).map(([folder, files]) => (
+                  <div key={folder} style={{marginTop: '1.5rem'}}>
+                    <h4 style={{color: 'var(--brand-primary)', marginBottom: '0.5rem'}}>📁 {folder} ({files.length} files)</h4>
+                    <ul style={{color: 'var(--text-muted)', fontSize: '0.9rem', paddingLeft: '1.5rem', margin: 0, maxHeight: '200px', overflowY: 'auto'}}>
+                      {files.map((f, i) => <li key={i} style={{marginBottom: '0.25rem'}}>{f}</li>)}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {categorizeResult && categorizeResult.moved_count === 0 && (
+              <p className="fade-in" style={{marginTop: '2rem', color: 'var(--text-muted)'}}>No loose files found to categorize in this directory.</p>
+            )}
+          </div>
+        )}
+        
+        {activeNav === 'zombies' && (
+          <div className="fade-in glass-panel" style={{textAlign: 'center', padding: '4rem 2rem'}}>
+            <Ghost size={48} color="var(--danger)" style={{marginBottom: '1rem'}} />
+            <h2>Zombie File Detection</h2>
+            <p style={{color: 'var(--text-muted)', maxWidth: '500px', margin: '0 auto 2rem auto'}}>
+              Identify massive files (&gt;100MB) that haven't been opened in over a year.
+            </p>
+            {!zombies ? (
+              <button className="btn btn-danger" style={{margin: '0 auto'}} onClick={handleZombies} disabled={isZombieScanning}>
+                {isZombieScanning ? 'Scanning...' : 'Scan for Zombies'}
+              </button>
+            ) : (
+              <div style={{textAlign: 'left', marginTop: '2rem'}}>
+                <h3>Found {zombies.length} Zombie Files</h3>
+                <ul className="file-list">
+                  {zombies.map((f, i) => <FileItem key={i} f={f} />)}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeNav === 'prune' && (
+          <div className="fade-in glass-panel" style={{textAlign: 'center', padding: '4rem 2rem'}}>
+            <FolderMinus size={48} color="var(--text-muted)" style={{marginBottom: '1rem'}} />
+            <h2>Prune Empty Folders</h2>
+            <p style={{color: 'var(--text-muted)', maxWidth: '500px', margin: '0 auto 2rem auto'}}>
+              Recursively scan and safely delete empty folders to clean up system debris.
+            </p>
+            <button className="btn btn-ghost" style={{margin: '0 auto'}} onClick={handlePrunePreview} disabled={isPruning}>
+               {isPruning ? 'Scanning...' : 'Preview Prune'}
+            </button>
+          </div>
+        )}
+
+        {activeNav === 'cloud' && (
+          <div className="fade-in glass-panel" style={{textAlign: 'center', padding: '4rem 2rem'}}>
+            <Cloud size={48} color="#0ea5e9" style={{marginBottom: '1rem'}} />
+            <h2>Connect Google Drive</h2>
+            <p style={{color: 'var(--text-muted)', maxWidth: '500px', margin: '0 auto 2rem auto'}}>
+              Run the exact same AI deduplication directly on your Cloud Storage.
+            </p>
+            <button className="btn btn-ghost" onClick={() => alert('Setup required: Place Google OAuth client_secret.json in the project root to authenticate.')}>
+              Connect Account
+            </button>
+          </div>
+        )}
+
       </main>
 
       {/* Floating Action Bar */}
       {selectedCount > 0 && (
         <div className="action-bar fade-in">
-          <div style={{fontSize: '0.95rem'}}>
-            Reclaim <span style={{color: '#fca5a5', fontWeight: 'bold'}}>{(selectedSize / (1024 * 1024)).toFixed(2)} MB</span> from {selectedCount} files
+          <div style={{fontSize: '0.95rem', fontWeight: 500}}>
+            Reclaim <span style={{color: 'var(--danger)', fontWeight: 'bold'}}>{(selectedSize / (1024 * 1024)).toFixed(2)} MB</span>
           </div>
-          <button className="btn btn-primary" style={{backgroundColor: 'var(--danger-color)', padding: '0.6rem 1.2rem'}} onClick={() => setIsModalOpen(true)}>
+          <button className="btn btn-danger" onClick={() => setIsModalOpen(true)}>
             <Trash2 size={16} /> Delete Selected
           </button>
         </div>
       )}
       
-      {/* Confirmation Modal */}
+      {/* Confirmation Modal for Deletion */}
       {isModalOpen && (
         <div className="game-overlay" onClick={() => setIsModalOpen(false)}>
-          <div className="glass-panel fade-in" style={{maxWidth: '400px', background: 'var(--sidebar-bg)'}} onClick={e => e.stopPropagation()}>
-            <h3 style={{marginTop: 0, color: 'var(--danger-color)'}}>Confirm Deletion</h3>
-            <p style={{color: '#a1a1aa', fontSize: '0.95rem', lineHeight: 1.5}}>
+          <div className="glass-panel fade-in" style={{maxWidth: '400px'}} onClick={e => e.stopPropagation()}>
+            <h3 style={{marginTop: 0, color: 'var(--danger)'}}>Confirm Deletion</h3>
+            <p style={{color: 'var(--text-muted)', fontSize: '0.95rem', lineHeight: 1.5}}>
               You are about to move {selectedCount} files to the Windows Recycle Bin. Are you sure you want to proceed?
             </p>
             <div style={{display: 'flex', gap: '1rem', marginTop: '2rem', justifyContent: 'flex-end'}}>
               <button className="btn btn-ghost" onClick={() => setIsModalOpen(false)} disabled={isDeleting}>Cancel</button>
-              <button className="btn btn-primary" style={{backgroundColor: 'var(--danger-color)'}} onClick={handleDelete} disabled={isDeleting}>
+              <button className="btn btn-danger" onClick={handleDelete} disabled={isDeleting}>
                 {isDeleting ? 'Moving...' : 'Yes, Delete'}
               </button>
             </div>
@@ -401,7 +613,60 @@ function App() {
         </div>
       )}
 
+      {/* Categorization Preview Modal */}
+      {categorizePlan && (
+        <div className="game-overlay" onClick={() => setCategorizePlan(null)}>
+          <div className="glass-panel fade-in" style={{maxWidth: '600px', width: '90%'}} onClick={e => e.stopPropagation()}>
+            <h3 style={{marginTop: 0, color: 'var(--brand-primary)'}}>Preview File Moves</h3>
+            <p style={{color: 'var(--text-muted)', fontSize: '0.95rem'}}>
+              The following {categorizePlan.length} files will be organized into folders. Please approve this change.
+            </p>
+            <div style={{maxHeight: '400px', overflowY: 'auto', background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px', margin: '1rem 0'}}>
+              {categorizePlan.map((item, idx) => (
+                <div key={idx} style={{marginBottom: '0.5rem', fontSize: '0.9rem'}}>
+                  <span style={{color: 'var(--text-muted)'}}>{item.file}</span>
+                  <span style={{color: 'var(--text-main)', margin: '0 0.5rem'}}>→</span>
+                  <span style={{color: 'var(--success)'}}>{item.category}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{display: 'flex', gap: '1rem', marginTop: '2rem', justifyContent: 'flex-end'}}>
+              <button className="btn btn-ghost" onClick={() => setCategorizePlan(null)} disabled={isCategorizing}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleCategorizeExecute} disabled={isCategorizing}>
+                {isCategorizing ? 'Executing...' : 'Approve & Move'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Prune Preview Modal */}
+      {prunePlan && (
+        <div className="game-overlay" onClick={() => setPrunePlan(null)}>
+          <div className="glass-panel fade-in" style={{maxWidth: '600px', width: '90%'}} onClick={e => e.stopPropagation()}>
+            <h3 style={{marginTop: 0, color: 'var(--danger)'}}>Preview Folder Pruning</h3>
+            <p style={{color: 'var(--text-muted)', fontSize: '0.95rem'}}>
+              The following {prunePlan.length} empty folders will be permanently deleted. Please approve this change.
+            </p>
+            <div style={{maxHeight: '400px', overflowY: 'auto', background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px', margin: '1rem 0'}}>
+              {prunePlan.map((path, idx) => (
+                <div key={idx} style={{marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-muted)'}}>
+                  🗑️ {path}
+                </div>
+              ))}
+            </div>
+            <div style={{display: 'flex', gap: '1rem', marginTop: '2rem', justifyContent: 'flex-end'}}>
+              <button className="btn btn-ghost" onClick={() => setPrunePlan(null)} disabled={isPruning}>Cancel</button>
+              <button className="btn btn-danger" onClick={handlePruneExecute} disabled={isPruning}>
+                {isPruning ? 'Executing...' : 'Approve & Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
+    </>
   );
 }
 

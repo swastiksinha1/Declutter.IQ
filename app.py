@@ -1,4 +1,6 @@
 import os
+import time
+import shutil
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from scanner import scan_directory
@@ -7,6 +9,15 @@ from send2trash import send2trash
 
 app = Flask(__name__)
 CORS(app) # Allow frontend to communicate with backend
+
+@app.route('/api/default-directory', methods=['GET'])
+def get_default_directory():
+    try:
+        downloads_path = os.path.expanduser('~/Downloads')
+        downloads_path = os.path.normpath(downloads_path)
+        return jsonify({"status": "success", "directory": downloads_path})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/scan', methods=['POST'])
 def run_scan():
@@ -102,6 +113,126 @@ def delete_files():
         "reclaimed_space_bytes": reclaimed_space,
         "errors": errors
     })
+
+@app.route('/api/zombies', methods=['POST'])
+def get_zombies():
+    data = request.json
+    directory = data.get('directory')
+    if not directory: return jsonify({"error": "Directory required"}), 400
+    
+    current_time = time.time()
+    ONE_YEAR = 31536000
+    HUNDRED_MB = 100 * 1024 * 1024
+    
+    zombies = []
+    try:
+        files_metadata = list(scan_directory(directory))
+        for f in files_metadata:
+            if f['size'] > HUNDRED_MB and (current_time - f.get('access_time', current_time)) > ONE_YEAR:
+                zombies.append(f)
+                
+        zombies.sort(key=lambda x: x['size'], reverse=True)
+        return jsonify({"status": "success", "zombies": zombies})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/categorize/preview', methods=['POST'])
+def categorize_preview():
+    data = request.json
+    directory = data.get('directory')
+    if not directory: return jsonify({"error": "Directory required"}), 400
+    
+    plan = []
+    categories = {
+        'Images': ['.jpg', '.jpeg', '.png', '.gif', '.webp'],
+        'Documents': ['.pdf', '.doc', '.docx', '.txt', '.csv', '.xlsx'],
+        'Videos': ['.mp4', '.mkv', '.avi', '.mov'],
+        'Archives': ['.zip', '.rar', '.7z', '.tar', '.gz'],
+        'Executables': ['.exe', '.msi', '.apk']
+    }
+    
+    try:
+        for f in os.listdir(directory):
+            filepath = os.path.join(directory, f)
+            if os.path.isfile(filepath):
+                ext = os.path.splitext(f)[1].lower()
+                target_folder = 'Others'
+                for cat, exts in categories.items():
+                    if ext in exts:
+                        target_folder = cat
+                        break
+                        
+                target_path = os.path.join(directory, target_folder)
+                plan.append({
+                    "file": f,
+                    "source": filepath,
+                    "target_dir": target_path,
+                    "category": target_folder
+                })
+        return jsonify({"status": "success", "plan": plan})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/categorize/execute', methods=['POST'])
+def categorize_execute():
+    data = request.json
+    plan = data.get('plan', [])
+    
+    moved_count = 0
+    details = {}
+    try:
+        for item in plan:
+            source = item['source']
+            target_dir = item['target_dir']
+            category = item['category']
+            f = item['file']
+            
+            if os.path.exists(source):
+                if not os.path.exists(target_dir):
+                    os.makedirs(target_dir)
+                shutil.move(source, os.path.join(target_dir, f))
+                
+                if category not in details:
+                    details[category] = []
+                details[category].append(f)
+                moved_count += 1
+                
+        return jsonify({"status": "success", "moved_count": moved_count, "details": details})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/prune/preview', methods=['POST'])
+def prune_preview():
+    data = request.json
+    directory = data.get('directory')
+    if not directory: return jsonify({"error": "Directory required"}), 400
+    
+    plan = []
+    try:
+        for dirpath, dirnames, filenames in os.walk(directory, topdown=False):
+            if dirpath == directory: continue
+            if not os.listdir(dirpath):
+                plan.append(dirpath)
+        return jsonify({"status": "success", "plan": plan})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/prune/execute', methods=['POST'])
+def prune_execute():
+    data = request.json
+    plan = data.get('plan', [])
+    pruned_count = 0
+    try:
+        for dirpath in plan:
+            if os.path.exists(dirpath) and not os.listdir(dirpath):
+                try:
+                    os.rmdir(dirpath)
+                    pruned_count += 1
+                except OSError:
+                    pass
+        return jsonify({"status": "success", "pruned_count": pruned_count})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
