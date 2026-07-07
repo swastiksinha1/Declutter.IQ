@@ -5,7 +5,7 @@ import {
   Cloud, Sparkles, FolderMinus, Loader, AlertTriangle, ChevronDown, ChevronUp, Wand2
 } from 'lucide-react';
 import MemoryGame from './components/MemoryGame';
-import FluidBackground from './components/FluidBackground';
+import LandingHero from './components/LandingHero';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -471,6 +471,11 @@ function App() {
           )}
           {error && <div style={{color: 'var(--danger)', marginTop: '1rem', fontWeight: 500}}>{error}</div>}
         </div>
+
+        {/* Landing Hero View */}
+        {activeNav === 'dashboard' && !scanResult && !isScanning && !isSemanticScanning && (
+          <LandingHero />
+        )}
 
         {/* Dashboard View */}
         {activeNav === 'dashboard' && scanResult && (
