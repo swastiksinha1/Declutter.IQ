@@ -2,10 +2,12 @@ import { useState, useMemo, useEffect } from 'react';
 import { 
   LayoutDashboard, Copy, Settings, Trash2, Search, Brain, 
   ImageIcon, FileText, CheckCircle, FolderTree, Ghost, 
-  Cloud, Sparkles, FolderMinus 
+  Cloud, Sparkles, FolderMinus, Loader, AlertTriangle
 } from 'lucide-react';
 import MemoryGame from './components/MemoryGame';
 import FluidBackground from './components/FluidBackground';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { motion, AnimatePresence } from 'framer-motion';
 
 function App() {
   const [activeNav, setActiveNav] = useState('dashboard');
@@ -379,12 +381,12 @@ function App() {
               className="dir-input"
             />
             <button className="btn btn-primary" onClick={handleScan} disabled={isScanning || isSemanticScanning}>
-              <Search size={18} />
-              {isScanning ? 'Scanning...' : 'Scan Path'}
+              {isScanning ? <Loader size={18} className="spin-slow" style={{animationDuration: '1s'}} /> : <Search size={18} />}
+              {isScanning ? 'Analyzing Files...' : 'Scan Path'}
             </button>
             <button className="btn btn-magic" onClick={handleSemanticScan} disabled={isScanning || isSemanticScanning || !scanResult}>
-              <Brain size={18} />
-              Deep AI Scan
+              {isSemanticScanning ? <Loader size={18} className="spin-slow" style={{animationDuration: '1s'}} /> : <Brain size={18} />}
+              {isSemanticScanning ? 'Deep Scanning...' : 'Deep AI Scan'}
             </button>
           </div>
           {directory && defaultDir && directory === defaultDir && (
@@ -398,29 +400,67 @@ function App() {
 
         {/* Dashboard View */}
         {activeNav === 'dashboard' && scanResult && (
-          <div className="fade-in">
-            <h2>Storage Overview</h2>
-            <div className="stat-grid">
-              <div className="stat-card">
-                <h3>Total Files</h3>
-                <p className="stat-value">{scanResult.analytics.total_files.toLocaleString()}</p>
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
+              <h2 style={{ margin: 0 }}>Storage Overview</h2>
+              {scanResult.analytics.reclaimable_space_bytes > 0 && (
+                 <div className="badge" style={{background: 'rgba(255, 69, 58, 0.15)', color: 'var(--danger)', padding: '0.5rem 1rem', fontSize: '0.85rem'}}>
+                    Clutter Detected
+                 </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+              {/* Left Column: Chart */}
+              <div className="glass-panel" style={{ flex: '2', minWidth: '400px', display: 'flex', flexDirection: 'column' }}>
+                <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: 500 }}>Space Analysis</h3>
+                <div style={{ height: '320px', flexGrow: 1, position: 'relative' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Wasted Space', value: scanResult.analytics.reclaimable_space_bytes },
+                          { name: 'Unique Files', value: Math.max(0, (scanResult.analytics.total_files * 1024 * 1024) - scanResult.analytics.reclaimable_space_bytes) }
+                        ]}
+                        cx="50%" cy="50%" innerRadius={90} outerRadius={125} paddingAngle={4} dataKey="value" stroke="none"
+                      >
+                        <Cell fill="var(--danger)" />
+                        <Cell fill="var(--brand-primary)" />
+                      </Pie>
+                      <Tooltip formatter={(value) => `${(value / (1024 * 1024)).toFixed(2)} MB`} contentStyle={{ backgroundColor: 'rgba(15,15,15,0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', backdropFilter: 'blur(10px)', color: 'white' }} itemStyle={{ color: 'white' }} />
+                      <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '0.9rem', color: 'var(--text-muted)' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
-              <div className="stat-card">
-                <h3>Reclaimable Space</h3>
-                <p className="stat-value highlight">
-                  {(scanResult.analytics.reclaimable_space_bytes / (1024 * 1024)).toFixed(2)} MB
-                </p>
-              </div>
-              <div className="stat-card">
-                <h3>Exact Dupes</h3>
-                <p className="stat-value">{scanResult.analytics.duplicate_groups_count}</p>
-              </div>
-              <div className="stat-card">
-                <h3>Visual Dupes</h3>
-                <p className="stat-value">{scanResult.analytics.near_duplicate_groups_count}</p>
+
+              {/* Right Column: Stats Grid */}
+              <div style={{ flex: '1', minWidth: '300px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1.5rem', alignContent: 'start' }}>
+                <div className="stat-card" style={{ padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
+                  <h3 style={{fontSize: '0.8rem'}}>Reclaimable</h3>
+                  <p className="stat-value highlight" style={{ fontSize: '1.8rem' }}>
+                    {(scanResult.analytics.reclaimable_space_bytes / (1024 * 1024)).toFixed(1)}<span style={{fontSize: '0.9rem', marginLeft: '4px'}}>MB</span>
+                  </p>
+                </div>
+                <div className="stat-card" style={{ padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
+                  <h3 style={{fontSize: '0.8rem'}}>Total Files</h3>
+                  <p className="stat-value" style={{ fontSize: '1.8rem' }}>{scanResult.analytics.total_files.toLocaleString()}</p>
+                </div>
+                <div className="stat-card" style={{ padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
+                  <h3 style={{fontSize: '0.8rem'}}>Exact Dupes</h3>
+                  <p className="stat-value" style={{ fontSize: '1.8rem' }}>{scanResult.analytics.duplicate_groups_count}</p>
+                </div>
+                <div className="stat-card" style={{ padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
+                  <h3 style={{fontSize: '0.8rem'}}>Visual Dupes</h3>
+                  <p className="stat-value" style={{ fontSize: '1.8rem' }}>{scanResult.analytics.near_duplicate_groups_count}</p>
+                </div>
               </div>
             </div>
-          </div>
+          </motion.div>
         )}
 
         {/* Review Duplicates View */}
@@ -434,7 +474,12 @@ function App() {
                   <Brain size={20} /> AI Conceptual Matches
                 </h3>
                 {semanticResult.semantic_duplicates.map((group, idx) => (
-                  <div key={idx} className="duplicate-group" style={{borderLeft: '4px solid #9d4edd'}}>
+                  <motion.div 
+                    initial={{ opacity: 0, y: 15 }} 
+                    animate={{ opacity: 1, y: 0 }} 
+                    transition={{ delay: idx * 0.05 }}
+                    key={idx} className="duplicate-group" style={{borderLeft: '4px solid #9d4edd'}}
+                  >
                     <div className="group-header">
                       <h4>{group.description}</h4>
                       <span className="badge" style={{background: 'rgba(157, 78, 221, 0.2)', color: '#d8b4fe'}}>
@@ -444,7 +489,7 @@ function App() {
                     <ul className="file-list">
                       {group.files.map((f, i) => <FileItem key={i} f={f} />)}
                     </ul>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             )}
@@ -455,7 +500,12 @@ function App() {
                   <ImageIcon size={20} /> Visually Similar Images
                 </h3>
                 {scanResult.near_duplicates.map((group, idx) => (
-                  <div key={idx} className="duplicate-group" style={{borderLeft: '4px solid #5e6ad2'}}>
+                  <motion.div 
+                    initial={{ opacity: 0, y: 15 }} 
+                    animate={{ opacity: 1, y: 0 }} 
+                    transition={{ delay: idx * 0.05 }}
+                    key={idx} className="duplicate-group" style={{borderLeft: '4px solid #5e6ad2'}}
+                  >
                     <div className="group-header">
                       <h4>Visual Group {idx + 1}</h4>
                       <span className="badge" style={{background: 'rgba(94, 106, 210, 0.2)', color: '#a5b4fc'}}>
@@ -465,7 +515,7 @@ function App() {
                     <ul className="file-list">
                       {group.files.map((f, i) => <FileItem key={i} f={f} />)}
                     </ul>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             )}
@@ -596,22 +646,40 @@ function App() {
       )}
       
       {/* Confirmation Modal for Deletion */}
-      {isModalOpen && (
-        <div className="game-overlay" onClick={() => setIsModalOpen(false)}>
-          <div className="glass-panel fade-in" style={{maxWidth: '400px'}} onClick={e => e.stopPropagation()}>
-            <h3 style={{marginTop: 0, color: 'var(--danger)'}}>Confirm Deletion</h3>
-            <p style={{color: 'var(--text-muted)', fontSize: '0.95rem', lineHeight: 1.5}}>
-              You are about to move {selectedCount} files to the Windows Recycle Bin. Are you sure you want to proceed?
-            </p>
-            <div style={{display: 'flex', gap: '1rem', marginTop: '2rem', justifyContent: 'flex-end'}}>
-              <button className="btn btn-ghost" onClick={() => setIsModalOpen(false)} disabled={isDeleting}>Cancel</button>
-              <button className="btn btn-danger" onClick={handleDelete} disabled={isDeleting}>
-                {isDeleting ? 'Moving...' : 'Yes, Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {isModalOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="game-overlay" onClick={() => setIsModalOpen(false)}
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
+              className="glass-panel" style={{maxWidth: '420px'}} onClick={e => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div style={{ background: 'rgba(255, 69, 58, 0.1)', padding: '1rem', borderRadius: '50%' }}>
+                  <AlertTriangle size={28} color="var(--danger)" />
+                </div>
+                <div>
+                  <h3 style={{margin: 0, fontSize: '1.2rem', color: 'var(--text-main)'}}>Delete Selected Files?</h3>
+                  <div style={{color: 'var(--danger)', fontWeight: 'bold', fontSize: '0.9rem', marginTop: '0.2rem'}}>
+                    Saving {(selectedSize / (1024 * 1024)).toFixed(2)} MB of space
+                  </div>
+                </div>
+              </div>
+              <p style={{color: 'var(--text-muted)', fontSize: '0.95rem', lineHeight: 1.6, margin: '0 0 2rem 0'}}>
+                You are about to move <strong>{selectedCount}</strong> files to the Recycle Bin. This action will permanently free up space on your drive. Do you wish to continue?
+              </p>
+              <div style={{display: 'flex', gap: '1rem', justifyContent: 'flex-end'}}>
+                <button className="btn btn-ghost" onClick={() => setIsModalOpen(false)} disabled={isDeleting}>Cancel</button>
+                <button className="btn btn-danger" onClick={handleDelete} disabled={isDeleting} style={{minWidth: '130px'}}>
+                  {isDeleting ? <><Loader size={16} className="spin-slow" style={{animationDuration: '1s'}}/> Deleting...</> : 'Yes, Clean Up'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Categorization Preview Modal */}
       {categorizePlan && (

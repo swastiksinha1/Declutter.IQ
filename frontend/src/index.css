@@ -27,40 +27,32 @@
 body {
   margin: 0;
   background-color: var(--bg-dark);
+  /* Static high-performance premium gradient */
+  background-image: 
+    radial-gradient(circle at 15% 30%, rgba(94,106,210,0.15) 0%, transparent 40%),
+    radial-gradient(circle at 85% 70%, rgba(157,78,221,0.15) 0%, transparent 40%),
+    radial-gradient(circle at 50% 10%, rgba(0,212,255,0.08) 0%, transparent 35%);
+  background-attachment: fixed;
   color: var(--text-main);
   min-height: 100vh;
   overflow-x: hidden;
   position: relative;
 }
 
-/* --- Dynamic Background Blobs --- */
-body::before, body::after {
-  content: '';
-  position: fixed;
-  width: 600px;
-  height: 600px;
-  border-radius: 50%;
-  filter: blur(120px);
-  z-index: -1;
-  opacity: 0.3;
-  animation: float 20s infinite ease-in-out alternate;
-  pointer-events: none;
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
-body::before {
-  background: radial-gradient(circle, rgba(94,106,210,0.8) 0%, rgba(0,0,0,0) 70%);
-  top: -200px;
-  left: -200px;
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
 }
-body::after {
-  background: radial-gradient(circle, rgba(157,78,221,0.6) 0%, rgba(0,0,0,0) 70%);
-  bottom: -200px;
-  right: -100px;
-  animation-delay: -10s;
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
 }
-
-@keyframes float {
-  0% { transform: translate(0, 0) scale(1); }
-  100% { transform: translate(50px, 50px) scale(1.2); }
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
 }
 
 /* --- Layout --- */
@@ -147,17 +139,18 @@ body::after {
 
 /* --- Premium Components --- */
 .glass-panel {
-  background: var(--bg-panel);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid var(--border-light);
-  border-radius: 20px;
-  padding: 2rem;
-  box-shadow: 0 10px 40px -10px rgba(0,0,0,0.5);
-  transition: border-color 0.3s;
+  background: linear-gradient(145deg, rgba(20,20,20,0.6) 0%, rgba(10,10,10,0.8) 100%);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 24px;
+  padding: 2.5rem;
+  box-shadow: 0 20px 50px -10px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.08);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .glass-panel:hover {
-  border-color: var(--border-hover);
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 30px 60px -15px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.15);
 }
 
 /* Inputs & Buttons */
