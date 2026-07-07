@@ -45,9 +45,26 @@ function FloatingFile({ initialPosition, color, speed, radiusOffset }) {
   });
 
   return (
-    <Box ref={mesh} args={[0.6, 0.8, 0.05]} position={initialPosition}>
-      <meshStandardMaterial color={color} roughness={0.1} metalness={0.9} />
-    </Box>
+    <group ref={mesh} position={initialPosition}>
+      {/* Main paper body */}
+      <Box args={[1.0, 1.4, 0.04]}>
+        <meshStandardMaterial color="#f8f9fa" roughness={0.5} metalness={0.1} />
+      </Box>
+      {/* Accent color header */}
+      <Box position={[0, 0.45, 0.03]} args={[0.8, 0.2, 0.02]}>
+        <meshStandardMaterial color={color} roughness={0.5} metalness={0.5} />
+      </Box>
+      {/* Fake text lines to make it look like a file */}
+      <Box position={[0, 0.1, 0.03]} args={[0.8, 0.06, 0.02]}>
+        <meshStandardMaterial color="#e9ecef" roughness={0.8} />
+      </Box>
+      <Box position={[-0.1, -0.1, 0.03]} args={[0.6, 0.06, 0.02]}>
+        <meshStandardMaterial color="#e9ecef" roughness={0.8} />
+      </Box>
+      <Box position={[0.1, -0.3, 0.03]} args={[0.6, 0.06, 0.02]}>
+        <meshStandardMaterial color="#e9ecef" roughness={0.8} />
+      </Box>
+    </group>
   );
 }
 
