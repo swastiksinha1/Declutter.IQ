@@ -482,6 +482,65 @@ export default function Dashboard() {
           </motion.div>
         )}
 
+        {/* Welcome Screen (No scan running, no results) */}
+        {activeNav === 'dashboard' && !scanResult && !isScanning && !isSemanticScanning && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, staggerChildren: 0.1 }}
+            style={{ display: 'flex', flexDirection: 'column', gap: '3rem', marginTop: '2rem' }}
+          >
+            <div style={{ textAlign: 'center' }}>
+              <h2 style={{ fontSize: '2.5rem', marginBottom: '1rem', fontWeight: 700 }}>Intelligent System Declutter</h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '1.2rem', maxWidth: '700px', margin: '0 auto', lineHeight: 1.6 }}>
+                Select a directory above and run a Deep AI Scan to instantly reclaim gigabytes of wasted storage space with zero risk of losing your original files.
+              </p>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+                <TiltCard className="stat-card" style={{ height: '100%', flexDirection: 'column', alignItems: 'flex-start', padding: '2rem' }}>
+                  <div className="stat-icon" style={{background: 'rgba(157, 78, 221, 0.1)', color: 'var(--primary)', marginBottom: '1rem'}}>
+                    <Brain size={24} />
+                  </div>
+                  <div style={{ fontSize: '1.3rem', fontWeight: 600, marginBottom: '0.5rem' }}>Semantic AI Matching</div>
+                  <div style={{ color: 'var(--text-muted)', lineHeight: 1.5 }}>Uses local AI embeddings to find visually identical images and duplicate files even if they have completely different resolutions, formats, or filenames.</div>
+                </TiltCard>
+              </motion.div>
+
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+                <TiltCard className="stat-card" style={{ height: '100%', flexDirection: 'column', alignItems: 'flex-start', padding: '2rem' }}>
+                  <div className="stat-icon" style={{background: 'rgba(0, 229, 255, 0.1)', color: '#00e5ff', marginBottom: '1rem'}}>
+                    <Wand2 size={24} />
+                  </div>
+                  <div style={{ fontSize: '1.3rem', fontWeight: 600, marginBottom: '0.5rem' }}>Smart Auto-Select</div>
+                  <div style={{ color: 'var(--text-muted)', lineHeight: 1.5 }}>Our 1-click cleanup algorithm intelligently preserves your highest quality originals while automatically marking thousands of redundancies for safe deletion.</div>
+                </TiltCard>
+              </motion.div>
+
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+                <TiltCard className="stat-card" style={{ height: '100%', flexDirection: 'column', alignItems: 'flex-start', padding: '2rem' }}>
+                  <div className="stat-icon" style={{background: 'rgba(255, 159, 67, 0.1)', color: '#ff9f43', marginBottom: '1rem'}}>
+                    <Ghost size={24} />
+                  </div>
+                  <div style={{ fontSize: '1.3rem', fontWeight: 600, marginBottom: '0.5rem' }}>Zombie File Pruning</div>
+                  <div style={{ color: 'var(--text-muted)', lineHeight: 1.5 }}>Automatically roots out corrupted data, 0-byte ghost files, and empty folder trees that silently clutter your hard drive over time.</div>
+                </TiltCard>
+              </motion.div>
+
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+                <TiltCard className="stat-card" style={{ height: '100%', flexDirection: 'column', alignItems: 'flex-start', padding: '2rem' }}>
+                  <div className="stat-icon" style={{background: 'rgba(46, 213, 115, 0.1)', color: 'var(--success)', marginBottom: '1rem'}}>
+                    <CheckCircle size={24} />
+                  </div>
+                  <div style={{ fontSize: '1.3rem', fontWeight: 600, marginBottom: '0.5rem' }}>100% Secure Reclaim</div>
+                  <div style={{ color: 'var(--text-muted)', lineHeight: 1.5 }}>Safely preview every single file in high-resolution before it is moved to the Trash. You maintain complete control over what gets deleted.</div>
+                </TiltCard>
+              </motion.div>
+            </div>
+          </motion.div>
+        )}
+
         {activeNav === 'dashboard' && scanResult && !isScanning && !isSemanticScanning && (
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
