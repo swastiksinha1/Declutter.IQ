@@ -49,8 +49,9 @@ def find_semantic_duplicates(metadata_list, threshold=0.95):
     image_exts = {'.jpg', '.jpeg', '.png', '.webp', '.bmp'}
     text_exts = {'.txt', '.pdf', '.docx', '.doc'}
     
-    images = [m for m in metadata_list if m['extension'].lower() in image_exts]
-    docs = [m for m in metadata_list if m['extension'].lower() in text_exts]
+    # Cap files to prevent CPU overload/long wait times during demo
+    images = [m for m in metadata_list if m['extension'].lower() in image_exts][:50]
+    docs = [m for m in metadata_list if m['extension'].lower() in text_exts][:50]
     
     semantic_groups = []
     
@@ -62,7 +63,12 @@ def find_semantic_duplicates(metadata_list, threshold=0.95):
             valid_images = []
             for img in images:
                 try:
-                    pil_images.append(Image.open(img['path']))
+                    # Open and aggressively downscale to CLIP's native size to save memory/decode time
+                    pil_img = Image.open(img['path'])
+                    if pil_img.mode != 'RGB':
+                        pil_img = pil_img.convert('RGB')
+                    pil_img.thumbnail((224, 224))
+                    pil_images.append(pil_img)
                     valid_images.append(img)
                 except Exception:
                     pass
