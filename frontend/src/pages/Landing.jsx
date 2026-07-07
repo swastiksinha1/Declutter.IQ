@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react';
+import React, { useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Float, Sparkles, Box, Cylinder, Text } from '@react-three/drei';
@@ -78,13 +78,15 @@ export default function Landing() {
           <directionalLight position={[10, 10, 5]} intensity={1.5} color="#9d4edd" />
           <pointLight position={[-10, -10, -10]} intensity={2} color="#5e6ad2" />
           
-          <CentralHub />
-          
-          {files.map((props, i) => (
-            <FloatingFile key={i} {...props} />
-          ))}
-          
-          <Sparkles count={300} scale={15} size={2} speed={0.4} opacity={0.5} color="#d8b4fe" />
+          <React.Suspense fallback={null}>
+            <CentralHub />
+            
+            {files.map((props, i) => (
+              <FloatingFile key={i} {...props} />
+            ))}
+            
+            <Sparkles count={300} scale={15} size={2} speed={0.4} opacity={0.5} color="#d8b4fe" />
+          </React.Suspense>
         </Canvas>
       </div>
 
