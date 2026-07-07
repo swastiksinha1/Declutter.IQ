@@ -169,7 +169,7 @@ export default function Landing() {
               initial={{ opacity: 0, y: 50, scale: 0.9 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ type: "spring", stiffness: 100, damping: 20, delay: 0.2 }}
-              style={{ textAlign: 'center', background: 'rgba(10,10,10,0.5)', padding: '2.5rem 5rem', borderRadius: '32px', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.1)' }}
+              style={{ textAlign: 'center', width: '100%', maxWidth: '800px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
             >
               <h1 style={{ margin: '0 0 1rem 0', fontSize: 'clamp(2rem, 5vw, 3.5rem)', fontWeight: 700, color: 'white', textShadow: '0 0 20px rgba(157, 78, 221, 0.5)' }}>
                 Unleash Your Storage
