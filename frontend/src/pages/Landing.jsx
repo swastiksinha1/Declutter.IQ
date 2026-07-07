@@ -168,20 +168,56 @@ function CentralHub() {
 }
 
 function ExplosiveSparkles() {
-  const ref = useRef();
-  useFrame((state) => {
-    if (!ref.current) return;
-    const t = state.clock.elapsedTime;
-    if (t < BOOM_TIME) {
-      ref.current.visible = false;
-    } else {
-      ref.current.visible = true;
+  const mesh = useRef();
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const count = 400;
+  
+  const particles = useMemo(() => {
+    const temp = [];
+    for (let i = 0; i < count; i++) {
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos((Math.random() * 2) - 1);
+      const speed = Math.random() * 20 + 10; 
+      
+      const dx = Math.sin(phi) * Math.cos(theta);
+      const dy = Math.sin(phi) * Math.sin(theta);
+      const dz = Math.cos(phi);
+      temp.push({ dx, dy, dz, speed });
     }
+    return temp;
+  }, [count]);
+
+  useFrame((state) => {
+    if (!mesh.current) return;
+    const t = state.clock.elapsedTime;
+    
+    if (t < BOOM_TIME) {
+      mesh.current.visible = false;
+      return;
+    }
+    mesh.current.visible = true;
+    
+    const timeSinceBoom = t - BOOM_TIME;
+    particles.forEach((p, i) => {
+      // Explode outwards with exponential friction
+      const distance = p.speed * timeSinceBoom * Math.exp(-timeSinceBoom * 1.5);
+      dummy.position.set(p.dx * distance, p.dy * distance, p.dz * distance);
+      
+      // Scale down over time
+      const scale = Math.max(0, 1 - timeSinceBoom * 0.3);
+      dummy.scale.set(scale, scale, scale);
+      
+      dummy.updateMatrix();
+      mesh.current.setMatrixAt(i, dummy.matrix);
+    });
+    mesh.current.instanceMatrix.needsUpdate = true;
   });
+
   return (
-    <group ref={ref}>
-      <Sparkles count={500} scale={20} size={4} speed={2} opacity={1} color="#d8b4fe" />
-    </group>
+    <instancedMesh ref={mesh} args={[null, null, count]}>
+      <sphereGeometry args={[0.08, 16, 16]} />
+      <meshBasicMaterial color="#d8b4fe" transparent opacity={0.8} depthWrite={false} blending={THREE.AdditiveBlending} />
+    </instancedMesh>
   );
 }
 
