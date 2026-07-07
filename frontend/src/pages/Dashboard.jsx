@@ -10,6 +10,12 @@ import ScanVisualizer from '../components/ScanVisualizer';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
 
+import AnimatedCounter from '../components/AnimatedCounter';
+import RippleButton from '../components/RippleButton';
+import CustomCursor from '../components/CustomCursor';
+import SignatureVisual from '../components/SignatureVisual';
+import SlotMachineIcon from '../components/SlotMachineIcon';
+
 export default function Dashboard() {
   const [activeNav, setActiveNav] = useState('dashboard');
   const [directory, setDirectory] = useState('');
@@ -38,6 +44,14 @@ export default function Dashboard() {
   const [semanticResult, setSemanticResult] = useState(null);
   const [error, setError] = useState('');
   
+  // Custom cursor state
+  const [isHoveringScan, setIsHoveringScan] = useState(false);
+
+  // Background speed sync
+  useEffect(() => {
+    document.body.style.setProperty('--grid-speed', (isScanning || isSemanticScanning) ? '8s' : '20s');
+  }, [isScanning, isSemanticScanning]);
+  
   // UX State
   const [selectedFiles, setSelectedFiles] = useState(new Set());
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -57,6 +71,8 @@ export default function Dashboard() {
   const [isCategorizing, setIsCategorizing] = useState(false);
   const [isPruning, setIsPruning] = useState(false);
   const [isZombieScanning, setIsZombieScanning] = useState(false);
+  
+  const [deletingFiles, setDeletingFiles] = useState(new Set());
 
   const handleScan = async () => {
     if (!directory) return;
@@ -163,6 +179,11 @@ export default function Dashboard() {
 
   const handleDelete = async () => {
     setIsDeleting(true);
+    setDeletingFiles(new Set(selectedFiles));
+    
+    // Artificial delay for checkmark and collapse animations
+    await new Promise(r => setTimeout(r, 800));
+    
     try {
       const response = await fetch('http://127.0.0.1:5000/api/delete', {
         method: 'POST',
@@ -178,11 +199,13 @@ export default function Dashboard() {
       setTimeout(() => setToast(''), 5000);
       
       setSelectedFiles(new Set());
+      setDeletingFiles(new Set());
       handleScan();
     } catch (err) {
       alert("Delete error: " + err.message);
     } finally {
       setIsDeleting(false);
+      setDeletingFiles(new Set());
     }
   };
 
@@ -329,7 +352,9 @@ export default function Dashboard() {
               onClick={(e) => e.stopPropagation()}
             >
               <ul className="file-list" style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                {group.files.map((f, i) => <FileItem key={i} f={f} />)}
+                <AnimatePresence>
+                  {group.files.map((f, i) => <FileItem key={f.path} f={f} />)}
+                </AnimatePresence>
               </ul>
             </motion.div>
           )}
@@ -340,8 +365,36 @@ export default function Dashboard() {
 
   const FileItem = ({ f }) => {
     const isImg = ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif'].includes(f.extension?.toLowerCase());
+    const isDeletingThis = deletingFiles.has(f.path);
+    
     return (
-      <li className="file-item">
+      <motion.li 
+        className="file-item"
+        initial={{ opacity: 1, height: 'auto', scale: 1 }}
+        animate={isDeletingThis ? { opacity: 0, height: 0, scale: 0.8, margin: 0, padding: 0 } : { opacity: 1, height: 'auto', scale: 1 }}
+        transition={isDeletingThis ? { delay: 0.4, duration: 0.4 } : { duration: 0.2 }}
+        style={{ position: 'relative', overflow: 'hidden' }}
+      >
+        {isDeletingThis && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(50, 215, 75, 0.15)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <svg width="40" height="40" viewBox="0 0 50 50">
+              <motion.path
+                d="M 14 27 l 7 7 l 16 -16"
+                fill="transparent"
+                strokeWidth="4"
+                stroke="#32d74b"
+                strokeLinecap="round"
+                initial={{ pathLength: 0 }}
+                animate={{ pathLength: 1 }}
+                transition={{ duration: 0.3 }}
+              />
+            </svg>
+          </motion.div>
+        )}
         <input 
           type="checkbox" 
           checked={selectedFiles.has(f.path)} 
@@ -371,7 +424,7 @@ export default function Dashboard() {
         <button className="btn btn-ghost" style={{padding: '0.4rem 0.8rem', fontSize: '0.8rem'}} onClick={() => { setRenameTarget(f); setNewName(f.filename); }}>
           <Sparkles size={14} style={{color: '#9d4edd'}} /> Rename
         </button>
-      </li>
+      </motion.li>
     );
   };
 
@@ -452,39 +505,66 @@ export default function Dashboard() {
       </aside>
 
       <main className="main-content">
+        <CustomCursor isVisible={isHoveringScan} />
+        
         <div className="glass-panel" style={{marginBottom: (!scanResult && !isScanning && !isSemanticScanning) ? '1.5rem' : '3rem', transition: 'margin 0.4s ease'}}>
-          <div className="scan-bar">
+          <div 
+            className="scan-bar" 
+            style={{ position: 'relative', overflow: 'hidden', cursor: isHoveringScan ? 'none' : 'default' }}
+            onMouseEnter={() => setIsHoveringScan(true)}
+            onMouseLeave={() => setIsHoveringScan(false)}
+          >
+            {isScanning && (
+              <motion.div
+                initial={{ left: '-100%' }}
+                animate={{ left: '200%' }}
+                transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  bottom: 0,
+                  width: '50%',
+                  background: 'linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.2), transparent)',
+                  pointerEvents: 'none',
+                  zIndex: 0
+                }}
+              />
+            )}
             <input 
               type="text" 
               placeholder="Enter directory (e.g. C:\\Users\\Username\\Downloads)" 
               value={directory}
               onChange={(e) => setDirectory(e.target.value)}
               className="dir-input"
+              style={{ cursor: isHoveringScan ? 'none' : 'text', zIndex: 1, position: 'relative' }}
             />
-            <button className="btn btn-primary" onClick={handleScan} disabled={isScanning || isSemanticScanning}>
-              {isScanning ? <Loader size={18} className="spin-slow" style={{animationDuration: '1s'}} /> : <Search size={18} />}
-              {isScanning ? 'Analyzing Files...' : 'Scan Path'}
-            </button>
-            <button 
+            <RippleButton className="btn btn-primary" onClick={handleScan} disabled={isScanning || isSemanticScanning} style={{ zIndex: 1, cursor: isHoveringScan ? 'none' : 'pointer' }}>
+              <SlotMachineIcon isScanning={isScanning} isSemantic={false} />
+              <span style={{ marginLeft: '0.5rem' }}>{isScanning ? 'Analyzing Files...' : 'Scan Path'}</span>
+            </RippleButton>
+            <RippleButton 
               className="btn" 
               onClick={handleSemanticScan} 
               disabled={isScanning || isSemanticScanning || !scanResult}
-              style={!scanResult ? {
-                background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(139, 92, 246, 0.03))',
-                color: '#8B5CF6',
-                boxShadow: '0 0 15px rgba(139, 92, 246, 0.15)',
-                border: '1px solid rgba(139, 92, 246, 0.25)',
-                transition: 'all 0.5s ease'
-              } : {
-                background: 'linear-gradient(135deg, #8B5CF6, #6D28D9)',
-                boxShadow: '0 0 25px rgba(139, 92, 246, 0.5)',
-                border: '1px solid transparent',
-                color: 'white',
-                transition: 'all 0.5s ease'
+              style={{
+                zIndex: 1, cursor: isHoveringScan ? 'none' : (scanResult ? 'pointer' : 'default'),
+                ...(!scanResult ? {
+                  background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(139, 92, 246, 0.03))',
+                  color: '#8B5CF6',
+                  boxShadow: '0 0 15px rgba(139, 92, 246, 0.15)',
+                  border: '1px solid rgba(139, 92, 246, 0.25)',
+                  transition: 'all 0.5s ease'
+                } : {
+                  background: 'linear-gradient(135deg, #8B5CF6, #6D28D9)',
+                  boxShadow: '0 0 25px rgba(139, 92, 246, 0.5)',
+                  border: '1px solid transparent',
+                  color: 'white',
+                  transition: 'all 0.5s ease'
+                })
               }}
             >
               {isSemanticScanning ? (
-                <Loader size={18} className="spin-slow" style={{animationDuration: '1s'}} />
+                <SlotMachineIcon isScanning={true} isSemantic={true} />
               ) : !scanResult ? (
                 <Lock size={18} opacity={0.6} />
               ) : (
@@ -492,8 +572,8 @@ export default function Dashboard() {
                   <Brain size={18} />
                 </motion.div>
               )}
-              {isSemanticScanning ? 'Deep Scanning...' : 'Deep AI Scan'}
-            </button>
+              <span style={{ marginLeft: '0.5rem' }}>{isSemanticScanning ? 'Deep Scanning...' : 'Deep AI Scan'}</span>
+            </RippleButton>
           </div>
           {directory && defaultDir && directory === defaultDir && (
             <div style={{fontSize: '0.85rem', color: 'var(--text)', opacity: 0.7, marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem'}}>
@@ -576,15 +656,15 @@ export default function Dashboard() {
                 <div className="glass-panel" style={{ display: 'flex', justifyContent: 'space-between', padding: '1.5rem 2.5rem', flexWrap: 'wrap', gap: '1rem' }}>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Files Scanned</span>
-                    <span style={{ fontSize: '1.4rem', fontWeight: 700 }}>0</span>
+                    <span style={{ fontSize: '1.4rem', fontWeight: 700 }}><AnimatedCounter value={0} /></span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Duplicates Found</span>
-                    <span style={{ fontSize: '1.4rem', fontWeight: 700 }}>0</span>
+                    <span style={{ fontSize: '1.4rem', fontWeight: 700 }}><AnimatedCounter value={0} /></span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Space Reclaimed</span>
-                    <span style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--success)' }}>0 MB</span>
+                    <span style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--success)' }}><AnimatedCounter value={0} suffix=" MB" /></span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Last Scan Date</span>
@@ -592,6 +672,11 @@ export default function Dashboard() {
                   </div>
                 </div>
               </div>
+            </motion.div>
+
+            {/* Signature 3D Visual placed below the stats strip */}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
+              <SignatureVisual isScanning={isScanning || isSemanticScanning} isCleaning={isDeleting} />
             </motion.div>
           </motion.div>
         )}

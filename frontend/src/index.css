@@ -36,7 +36,7 @@ body {
     radial-gradient(circle at 50% 10%, rgba(0,212,255,0.08) 0%, transparent 35%);
   background-size: 50px 50px, 50px 50px, 100% 100%, 100% 100%, 100% 100%;
   background-attachment: fixed;
-  animation: gridMove 20s linear infinite;
+  animation: gridMove var(--grid-speed, 20s) linear infinite;
   color: var(--text-main);
   min-height: 100vh;
   overflow-x: hidden;
