@@ -44,6 +44,14 @@ export default function Dashboard() {
   const [semanticResult, setSemanticResult] = useState(null);
   const [error, setError] = useState('');
   
+  // Stats state
+  const [sessionStats, setSessionStats] = useState({
+    filesScanned: 0,
+    duplicatesFound: 0,
+    spaceReclaimedBytes: 0,
+    lastScanDate: 'Never'
+  });
+  
   // Custom cursor state
   const [isHoveringScan, setIsHoveringScan] = useState(false);
 
@@ -94,6 +102,17 @@ export default function Dashboard() {
       
       setScanResult(data);
       
+      let dupsCount = 0;
+      data.duplicates.forEach(g => dupsCount += (g.files.length - 1));
+      data.near_duplicates.forEach(g => dupsCount += (g.files.length - 1));
+
+      setSessionStats(prev => ({
+        ...prev,
+        filesScanned: data.analytics.total_files,
+        duplicatesFound: dupsCount,
+        lastScanDate: new Date().toLocaleDateString()
+      }));
+      
       const toSelect = new Set();
       data.duplicates.forEach(group => group.files.slice(1).forEach(f => toSelect.add(f.path)));
       data.near_duplicates.forEach(group => group.files.slice(1).forEach(f => toSelect.add(f.path)));
@@ -134,6 +153,15 @@ export default function Dashboard() {
       if (!response.ok) throw new Error(data.error || 'Semantic scan failed');
       
       setSemanticResult(data);
+      
+      let semanticDupsCount = 0;
+      data.semantic_duplicates.forEach(g => semanticDupsCount += (g.files.length - 1));
+
+      setSessionStats(prev => ({
+        ...prev,
+        duplicatesFound: prev.duplicatesFound + semanticDupsCount,
+        lastScanDate: new Date().toLocaleDateString()
+      }));
       
       const toSelect = new Set(selectedFiles);
       data.semantic_duplicates.forEach(group => group.files.slice(1).forEach(f => toSelect.add(f.path)));
@@ -197,6 +225,11 @@ export default function Dashboard() {
       setIsModalOpen(false);
       setToast(`Safely moved ${data.deleted_count} files to Recycle Bin! Reclaimed ${(data.reclaimed_space_bytes / (1024*1024)).toFixed(2)} MB.`);
       setTimeout(() => setToast(''), 5000);
+      
+      setSessionStats(prev => ({
+        ...prev,
+        spaceReclaimedBytes: prev.spaceReclaimedBytes + data.reclaimed_space_bytes
+      }));
       
       setSelectedFiles(new Set());
       setDeletingFiles(new Set());
@@ -656,19 +689,19 @@ export default function Dashboard() {
                 <div className="glass-panel" style={{ display: 'flex', justifyContent: 'space-between', padding: '1.5rem 2.5rem', flexWrap: 'wrap', gap: '1rem' }}>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Files Scanned</span>
-                    <span style={{ fontSize: '1.4rem', fontWeight: 700 }}><AnimatedCounter value={0} /></span>
+                    <span style={{ fontSize: '1.4rem', fontWeight: 700 }}><AnimatedCounter value={sessionStats.filesScanned} /></span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Duplicates Found</span>
-                    <span style={{ fontSize: '1.4rem', fontWeight: 700 }}><AnimatedCounter value={0} /></span>
+                    <span style={{ fontSize: '1.4rem', fontWeight: 700 }}><AnimatedCounter value={sessionStats.duplicatesFound} /></span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Space Reclaimed</span>
-                    <span style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--success)' }}><AnimatedCounter value={0} suffix=" MB" /></span>
+                    <span style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--success)' }}><AnimatedCounter value={parseFloat((sessionStats.spaceReclaimedBytes / (1024 * 1024)).toFixed(1))} suffix=" MB" /></span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Last Scan Date</span>
-                    <span style={{ fontSize: '1.4rem', fontWeight: 700 }}>Never</span>
+                    <span style={{ fontSize: '1.4rem', fontWeight: 700 }}>{sessionStats.lastScanDate}</span>
                   </div>
                 </div>
               </div>
