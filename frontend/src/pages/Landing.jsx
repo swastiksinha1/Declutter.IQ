@@ -1,7 +1,8 @@
 import React, { useRef, useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Float, Sparkles, Box, Cylinder, RoundedBox } from '@react-three/drei';
+import { Float, Sparkles, Box, Cylinder, RoundedBox, Html } from '@react-three/drei';
+import { FileText, Music, FolderOpen, AlertTriangle, Image as ImageIcon, Video } from 'lucide-react';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as THREE from 'three';
@@ -85,7 +86,7 @@ function DynamicLighting() {
   );
 }
 
-function FloatingFile({ initialPosition, color, speed, radiusOffset }) {
+function FloatingFile({ initialPosition, color, speed, radiusOffset, iconType }) {
   const mesh = useRef();
   
   useFrame((state) => {
@@ -127,6 +128,28 @@ function FloatingFile({ initialPosition, color, speed, radiusOffset }) {
         clearcoat={1}
         clearcoatRoughness={0.1}
       />
+      {/* Front Icon */}
+      <Html transform position={[0, 0, 0.03]} distanceFactor={4}>
+        <div style={{ color: 'white', opacity: 0.9, filter: 'drop-shadow(0 0 15px rgba(255,255,255,0.6))' }}>
+          {iconType === 'file' && <FileText size={72} strokeWidth={1.5} />}
+          {iconType === 'audio' && <Music size={72} strokeWidth={1.5} />}
+          {iconType === 'folder' && <FolderOpen size={72} strokeWidth={1.5} />}
+          {iconType === 'spam' && <AlertTriangle size={72} strokeWidth={1.5} color="var(--danger)" />}
+          {iconType === 'image' && <ImageIcon size={72} strokeWidth={1.5} />}
+          {iconType === 'video' && <Video size={72} strokeWidth={1.5} />}
+        </div>
+      </Html>
+      {/* Back Icon (reversed so it looks correct from the back) */}
+      <Html transform position={[0, 0, -0.03]} rotation={[0, Math.PI, 0]} distanceFactor={4}>
+        <div style={{ color: 'white', opacity: 0.9, filter: 'drop-shadow(0 0 15px rgba(255,255,255,0.6))' }}>
+          {iconType === 'file' && <FileText size={72} strokeWidth={1.5} />}
+          {iconType === 'audio' && <Music size={72} strokeWidth={1.5} />}
+          {iconType === 'folder' && <FolderOpen size={72} strokeWidth={1.5} />}
+          {iconType === 'spam' && <AlertTriangle size={72} strokeWidth={1.5} color="var(--danger)" />}
+          {iconType === 'image' && <ImageIcon size={72} strokeWidth={1.5} />}
+          {iconType === 'video' && <Video size={72} strokeWidth={1.5} />}
+        </div>
+      </Html>
     </RoundedBox>
   );
 }
@@ -190,10 +213,12 @@ export default function Landing() {
   const files = useMemo(() => {
     const temp = [];
     const colors = ['#5e6ad2', '#d8b4fe', '#a5b4fc', '#ff453a', '#ffffff', '#9d4edd'];
+    const types = ['file', 'audio', 'folder', 'spam', 'image', 'video'];
     for (let i = 0; i < 35; i++) {
       temp.push({
         initialPosition: [(Math.random() - 0.5) * 12, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 12],
         color: colors[Math.floor(Math.random() * colors.length)],
+        iconType: types[Math.floor(Math.random() * types.length)],
         speed: 0.8 + Math.random() * 1.5,
         radiusOffset: Math.random() * 4
       });
