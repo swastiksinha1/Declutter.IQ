@@ -1,7 +1,8 @@
 import React, { useRef, useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Float, Sparkles, Box, Cylinder, RoundedBox } from '@react-three/drei';
+import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as THREE from 'three';
 
@@ -9,6 +10,80 @@ import * as THREE from 'three';
 const ORBIT_DUR = 3.0;
 const COLLAPSE_DUR = 1.0;
 const BOOM_TIME = ORBIT_DUR + COLLAPSE_DUR; // 4.0s
+
+function CameraController() {
+  const { camera } = useThree();
+  
+  useFrame((state) => {
+    const t = state.clock.elapsedTime;
+    
+    if (t < ORBIT_DUR) {
+      // Slow pan
+      camera.position.x = Math.sin(t * 0.2) * 2;
+      camera.position.y = 2 + Math.cos(t * 0.2) * 1;
+      camera.position.z = 10;
+      camera.lookAt(0, 0, 0);
+    } else if (t >= ORBIT_DUR && t < BOOM_TIME) {
+      // Dramatic Zoom In
+      const progress = (t - ORBIT_DUR) / COLLAPSE_DUR;
+      camera.position.lerp(new THREE.Vector3(0, 0, 4), progress * 0.1);
+      camera.lookAt(0, 0, 0);
+    } else {
+      // Boom Shake
+      const timeSinceBoom = t - BOOM_TIME;
+      if (timeSinceBoom < 0.5) {
+        // Aggressive shake that damps over 0.5s
+        const intensity = (0.5 - timeSinceBoom) * 1.5; // 0.75 to 0
+        camera.position.x = (Math.random() - 0.5) * intensity;
+        camera.position.y = (Math.random() - 0.5) * intensity;
+        camera.position.z = 4 + (Math.random() - 0.5) * intensity;
+      } else {
+        // Settle back to default
+        camera.position.lerp(new THREE.Vector3(0, 2, 10), 0.05);
+      }
+      camera.lookAt(0, 0, 0);
+    }
+  });
+  return null;
+}
+
+function DynamicLighting() {
+  const lightRef = useRef();
+  const ambientRef = useRef();
+  
+  useFrame((state) => {
+    const t = state.clock.elapsedTime;
+    
+    if (t < ORBIT_DUR) {
+      if (ambientRef.current) ambientRef.current.intensity = 0.4;
+      if (lightRef.current) lightRef.current.intensity = 2;
+    } else if (t >= ORBIT_DUR && t < BOOM_TIME) {
+      // Dim lights for the collapse
+      const progress = (t - ORBIT_DUR) / COLLAPSE_DUR;
+      if (ambientRef.current) ambientRef.current.intensity = Math.max(0, 0.4 - progress * 0.4);
+      if (lightRef.current) lightRef.current.intensity = Math.max(0, 2 - progress * 2);
+    } else {
+      // Flash at Boom
+      const timeSinceBoom = t - BOOM_TIME;
+      if (timeSinceBoom < 0.2) {
+        if (ambientRef.current) ambientRef.current.intensity = 5; // Blinding flash
+        if (lightRef.current) lightRef.current.intensity = 10;
+      } else {
+        // Fade back to normal
+        if (ambientRef.current) ambientRef.current.intensity = THREE.MathUtils.lerp(ambientRef.current.intensity, 0.4, 0.05);
+        if (lightRef.current) lightRef.current.intensity = THREE.MathUtils.lerp(lightRef.current.intensity, 2, 0.05);
+      }
+    }
+  });
+
+  return (
+    <>
+      <ambientLight ref={ambientRef} intensity={0.4} />
+      <directionalLight position={[10, 10, 5]} intensity={1.5} color="#9d4edd" />
+      <pointLight ref={lightRef} position={[-10, -10, -10]} intensity={2} color="#5e6ad2" />
+    </>
+  );
+}
 
 function FloatingFile({ initialPosition, color, speed, radiusOffset }) {
   const mesh = useRef();
@@ -18,7 +93,6 @@ function FloatingFile({ initialPosition, color, speed, radiusOffset }) {
     const t = state.clock.elapsedTime;
     
     if (t < ORBIT_DUR) {
-      // Phase 1: Orbit
       const angle = (t * speed * 0.3) + initialPosition[0];
       const radius = 3 + radiusOffset + Math.sin(t * speed * 0.5) * 1.5;
       mesh.current.position.x = Math.cos(angle) * radius;
@@ -28,18 +102,13 @@ function FloatingFile({ initialPosition, color, speed, radiusOffset }) {
       mesh.current.rotation.y = Math.sin(t * speed) * 0.5;
       mesh.current.scale.set(1, 1, 1);
     } else if (t >= ORBIT_DUR && t < BOOM_TIME) {
-      // Phase 2: Collapse
-      const progress = (t - ORBIT_DUR) / COLLAPSE_DUR; // 0 to 1
-      // Accelerate towards center using lerp
+      const progress = (t - ORBIT_DUR) / COLLAPSE_DUR; 
       mesh.current.position.lerp(new THREE.Vector3(0, 0, 0), progress * 0.2);
       mesh.current.rotation.x += speed * 0.2;
       mesh.current.rotation.y += speed * 0.2;
-      
-      // Shrink as it gets close
       const scale = Math.max(0, 1 - Math.pow(progress, 2));
       mesh.current.scale.set(scale, scale, scale);
     } else {
-      // Phase 3: Boom! (Hidden)
       mesh.current.scale.set(0, 0, 0);
     }
   });
@@ -73,12 +142,9 @@ function CentralHub() {
     mesh.current.rotation.z = Math.sin(t * 0.5) * 0.1;
     
     if (t < BOOM_TIME) {
-      // Hidden during orbit and collapse
       mesh.current.scale.set(0, 0, 0);
     } else {
-      // Boom! Scale up with a bounce
-      const progress = Math.min((t - BOOM_TIME) * 3, 1); // Fast scale up
-      // Spring math
+      const progress = Math.min((t - BOOM_TIME) * 3, 1); 
       const scale = 1 * (1 - Math.pow(1 - progress, 3)); 
       mesh.current.scale.set(scale, scale, scale);
     }
@@ -87,13 +153,12 @@ function CentralHub() {
   return (
     <Float speed={2} rotationIntensity={0.5} floatIntensity={1}>
       <Cylinder ref={mesh} args={[1.2, 0.8, 1.5, 32]} position={[0, -0.5, 0]}>
-        <meshStandardMaterial color="#9d4edd" roughness={0.3} metalness={0.7} wireframe />
+        <meshStandardMaterial color="#9d4edd" roughness={0.3} metalness={0.7} wireframe emissive="#9d4edd" emissiveIntensity={2} />
       </Cylinder>
     </Float>
   );
 }
 
-// Sparkles controller
 function ExplosiveSparkles() {
   const ref = useRef();
   useFrame((state) => {
@@ -107,7 +172,7 @@ function ExplosiveSparkles() {
   });
   return (
     <group ref={ref}>
-      <Sparkles count={400} scale={15} size={3} speed={2} opacity={0.8} color="#d8b4fe" />
+      <Sparkles count={500} scale={20} size={4} speed={2} opacity={1} color="#d8b4fe" />
     </group>
   );
 }
@@ -116,7 +181,6 @@ export default function Landing() {
   const navigate = useNavigate();
   const [phase, setPhase] = useState(1);
 
-  // Sync React state with Three.js clock for UI
   useEffect(() => {
     const timer1 = setTimeout(() => setPhase(2), ORBIT_DUR * 1000);
     const timer2 = setTimeout(() => setPhase(3), BOOM_TIME * 1000);
@@ -143,9 +207,8 @@ export default function Landing() {
       {/* 3D Canvas Background */}
       <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 }}>
         <Canvas camera={{ position: [0, 2, 10], fov: 45 }}>
-          <ambientLight intensity={0.4} />
-          <directionalLight position={[10, 10, 5]} intensity={1.5} color="#9d4edd" />
-          <pointLight position={[-10, -10, -10]} intensity={2} color="#5e6ad2" />
+          <CameraController />
+          <DynamicLighting />
           
           <React.Suspense fallback={null}>
             <CentralHub />
@@ -153,6 +216,10 @@ export default function Landing() {
             {files.map((props, i) => (
               <FloatingFile key={i} {...props} />
             ))}
+            
+            <EffectComposer>
+              <Bloom luminanceThreshold={0} luminanceSmoothing={0.9} height={300} intensity={1.5} />
+            </EffectComposer>
           </React.Suspense>
         </Canvas>
       </div>
