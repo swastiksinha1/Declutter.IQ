@@ -33,11 +33,11 @@ function CameraController() {
       // Boom Shake
       const timeSinceBoom = t - BOOM_TIME;
       if (timeSinceBoom < 0.5) {
-        // Aggressive shake that damps over 0.5s
-        const intensity = (0.5 - timeSinceBoom) * 1.5; // 0.75 to 0
-        camera.position.x = (Math.random() - 0.5) * intensity;
-        camera.position.y = (Math.random() - 0.5) * intensity;
-        camera.position.z = 4 + (Math.random() - 0.5) * intensity;
+        // Smooth sine wave shake that damps over 0.5s
+        const intensity = (0.5 - timeSinceBoom) * 1.5; 
+        camera.position.x = Math.sin(t * 50) * intensity;
+        camera.position.y = Math.cos(t * 45) * intensity;
+        camera.position.z = 4 + Math.sin(t * 40) * intensity;
       } else {
         // Settle back to default
         camera.position.lerp(new THREE.Vector3(0, 2, 10), 0.05);
@@ -104,10 +104,11 @@ function FloatingFile({ initialPosition, color, speed, radiusOffset, iconType })
       mesh.current.scale.set(1, 1, 1);
     } else if (t >= ORBIT_DUR && t < BOOM_TIME) {
       const progress = (t - ORBIT_DUR) / COLLAPSE_DUR; 
-      mesh.current.position.lerp(new THREE.Vector3(0, 0, 0), progress * 0.2);
-      mesh.current.rotation.x += speed * 0.2;
-      mesh.current.rotation.y += speed * 0.2;
-      const scale = Math.max(0, 1 - Math.pow(progress, 2));
+      const easeProgress = Math.pow(progress, 2);
+      mesh.current.position.lerp(new THREE.Vector3(0, 0, 0), easeProgress * 0.4);
+      mesh.current.rotation.x += speed * 0.3;
+      mesh.current.rotation.y += speed * 0.3;
+      const scale = Math.max(0, 1 - Math.pow(progress, 4));
       mesh.current.scale.set(scale, scale, scale);
     } else {
       mesh.current.scale.set(0, 0, 0);
@@ -115,32 +116,16 @@ function FloatingFile({ initialPosition, color, speed, radiusOffset, iconType })
   });
 
   return (
-    <RoundedBox ref={mesh} position={initialPosition} args={[1.2, 1.6, 0.05]} radius={0.1} smoothness={4}>
-      <meshPhysicalMaterial 
+    <RoundedBox ref={mesh} position={initialPosition} args={[1.2, 1.6, 0.05]} radius={0.1} smoothness={2}>
+      <meshStandardMaterial 
         color={color} 
-        transmission={0.5} 
-        opacity={0.9}
         transparent={true}
-        metalness={0.5} 
-        roughness={0.2} 
-        ior={1.5} 
-        thickness={0.5} 
-        clearcoat={1}
-        clearcoatRoughness={0.1}
+        opacity={0.8}
+        metalness={0.9} 
+        roughness={0.1} 
       />
       {/* Front Icon */}
       <Html transform position={[0, 0, 0.03]} distanceFactor={4}>
-        <div style={{ color: 'white', opacity: 0.9, filter: 'drop-shadow(0 0 15px rgba(255,255,255,0.6))' }}>
-          {iconType === 'file' && <FileText size={72} strokeWidth={1.5} />}
-          {iconType === 'audio' && <Music size={72} strokeWidth={1.5} />}
-          {iconType === 'folder' && <FolderOpen size={72} strokeWidth={1.5} />}
-          {iconType === 'spam' && <AlertTriangle size={72} strokeWidth={1.5} color="var(--danger)" />}
-          {iconType === 'image' && <ImageIcon size={72} strokeWidth={1.5} />}
-          {iconType === 'video' && <Video size={72} strokeWidth={1.5} />}
-        </div>
-      </Html>
-      {/* Back Icon (reversed so it looks correct from the back) */}
-      <Html transform position={[0, 0, -0.03]} rotation={[0, Math.PI, 0]} distanceFactor={4}>
         <div style={{ color: 'white', opacity: 0.9, filter: 'drop-shadow(0 0 15px rgba(255,255,255,0.6))' }}>
           {iconType === 'file' && <FileText size={72} strokeWidth={1.5} />}
           {iconType === 'audio' && <Music size={72} strokeWidth={1.5} />}
