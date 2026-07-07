@@ -199,12 +199,22 @@ function ExplosiveSparkles() {
     
     const timeSinceBoom = t - BOOM_TIME;
     particles.forEach((p, i) => {
-      // Explode outwards with exponential friction
-      const distance = p.speed * timeSinceBoom * Math.exp(-timeSinceBoom * 1.5);
-      dummy.position.set(p.dx * distance, p.dy * distance, p.dz * distance);
+      // Explode outwards rapidly, then settle at a maximum distance
+      const explodeDistance = p.speed * (1 - Math.exp(-timeSinceBoom * 3.0)); 
       
-      // Scale down over time
-      const scale = Math.max(0, 1 - timeSinceBoom * 0.3);
+      // Add a slow, gentle drift after they settle
+      const driftX = Math.sin(timeSinceBoom * 0.5 + p.speed) * 0.5;
+      const driftY = Math.cos(timeSinceBoom * 0.4 + p.speed) * 0.5;
+      const driftZ = Math.sin(timeSinceBoom * 0.6 + p.speed) * 0.5;
+      
+      dummy.position.set(
+        p.dx * explodeDistance + driftX, 
+        p.dy * explodeDistance + driftY, 
+        p.dz * explodeDistance + driftZ
+      );
+      
+      // Start at scale 1.0 during explosion, settle at scale 0.4 forever
+      const scale = 0.4 + 0.6 * Math.exp(-timeSinceBoom * 2.0);
       dummy.scale.set(scale, scale, scale);
       
       dummy.updateMatrix();
