@@ -1,7 +1,7 @@
 import React, { useRef, useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Float, Sparkles, Box, Cylinder } from '@react-three/drei';
+import { Float, Sparkles, Box, Cylinder, RoundedBox } from '@react-three/drei';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as THREE from 'three';
 
@@ -45,26 +45,20 @@ function FloatingFile({ initialPosition, color, speed, radiusOffset }) {
   });
 
   return (
-    <group ref={mesh} position={initialPosition}>
-      {/* Main paper body */}
-      <Box args={[1.0, 1.4, 0.04]}>
-        <meshStandardMaterial color="#f8f9fa" roughness={0.5} metalness={0.1} />
-      </Box>
-      {/* Accent color header */}
-      <Box position={[0, 0.45, 0.03]} args={[0.8, 0.2, 0.02]}>
-        <meshStandardMaterial color={color} roughness={0.5} metalness={0.5} />
-      </Box>
-      {/* Fake text lines to make it look like a file */}
-      <Box position={[0, 0.1, 0.03]} args={[0.8, 0.06, 0.02]}>
-        <meshStandardMaterial color="#e9ecef" roughness={0.8} />
-      </Box>
-      <Box position={[-0.1, -0.1, 0.03]} args={[0.6, 0.06, 0.02]}>
-        <meshStandardMaterial color="#e9ecef" roughness={0.8} />
-      </Box>
-      <Box position={[0.1, -0.3, 0.03]} args={[0.6, 0.06, 0.02]}>
-        <meshStandardMaterial color="#e9ecef" roughness={0.8} />
-      </Box>
-    </group>
+    <RoundedBox ref={mesh} position={initialPosition} args={[1.2, 1.6, 0.05]} radius={0.1} smoothness={4}>
+      <meshPhysicalMaterial 
+        color={color} 
+        transmission={0.5} 
+        opacity={0.9}
+        transparent={true}
+        metalness={0.5} 
+        roughness={0.2} 
+        ior={1.5} 
+        thickness={0.5} 
+        clearcoat={1}
+        clearcoatRoughness={0.1}
+      />
+    </RoundedBox>
   );
 }
 
