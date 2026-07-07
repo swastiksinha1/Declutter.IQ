@@ -1,7 +1,7 @@
 import React, { useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Float, Sparkles, Box, Cylinder, Text } from '@react-three/drei';
+import { Float, Sparkles, Box, Cylinder } from '@react-three/drei';
 import { motion } from 'framer-motion';
 
 // A single floating file object
@@ -9,6 +9,7 @@ function FloatingFile({ initialPosition, color, speed, radiusOffset }) {
   const mesh = useRef();
   
   useFrame((state) => {
+    if (!mesh.current) return;
     const t = state.clock.getElapsedTime();
     // Complex flow animation: Files orbiting and floating towards the center
     const angle = (t * speed * 0.3) + initialPosition[0];
@@ -34,6 +35,7 @@ function CentralHub() {
   const mesh = useRef();
   
   useFrame((state) => {
+    if (!mesh.current) return;
     mesh.current.rotation.y += 0.005;
     mesh.current.rotation.z = Math.sin(state.clock.elapsedTime * 0.5) * 0.1;
   });
@@ -43,9 +45,6 @@ function CentralHub() {
       <Cylinder ref={mesh} args={[1.2, 0.8, 1.5, 32]} position={[0, -0.5, 0]}>
         <meshStandardMaterial color="#9d4edd" roughness={0.3} metalness={0.7} wireframe />
       </Cylinder>
-      <Text position={[0, 1.2, 0]} fontSize={0.4} color="white" anchorX="center" anchorY="middle" font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiA.woff2">
-        Declutter.IQ
-      </Text>
     </Float>
   );
 }
