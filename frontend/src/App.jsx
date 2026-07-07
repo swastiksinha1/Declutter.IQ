@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { 
   LayoutDashboard, Copy, Settings, Trash2, Search, Brain, 
   ImageIcon, FileText, CheckCircle, FolderTree, Ghost, 
-  Cloud, Sparkles, FolderMinus, Loader, AlertTriangle
+  Cloud, Sparkles, FolderMinus, Loader, AlertTriangle, ChevronDown, ChevronUp, Wand2
 } from 'lucide-react';
 import MemoryGame from './components/MemoryGame';
 import FluidBackground from './components/FluidBackground';
@@ -84,6 +84,18 @@ function App() {
     } finally {
       setIsScanning(false);
     }
+  };
+
+  const handleAutoSelect = () => {
+    if (!scanResult) return;
+    const toSelect = new Set();
+    scanResult.duplicates?.forEach(group => group.files.slice(1).forEach(f => toSelect.add(f.path)));
+    scanResult.near_duplicates?.forEach(group => group.files.slice(1).forEach(f => toSelect.add(f.path)));
+    if (semanticResult && semanticResult.semantic_duplicates) {
+      semanticResult.semantic_duplicates.forEach(group => group.files.slice(1).forEach(f => toSelect.add(f.path)));
+    }
+    setSelectedFiles(toSelect);
+    showToast("✨ Magic Auto-Select applied! All redundant files marked for deletion.");
   };
 
   const handleSemanticScan = async () => {
@@ -260,6 +272,44 @@ function App() {
     } catch (err) {
       alert("Error: " + err.message);
     } finally { setIsZombieScanning(false); }
+  };
+
+  const DuplicateGroup = ({ group, title, colorClass, borderColor, initialDelay }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    return (
+      <motion.div 
+        initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: initialDelay * 0.05 }}
+        className="duplicate-group" style={{ borderLeft: `4px solid ${borderColor}`, cursor: 'pointer', overflow: 'hidden', padding: '1.2rem', marginBottom: '1rem', background: 'rgba(20,20,20,0.4)', borderRadius: '12px' }}
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+             <h4 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--text-main)' }}>{title}</h4>
+             <span className="badge" style={{ ...colorClass, padding: '0.3rem 0.8rem' }}>
+               {(group.redundant_space / (1024 * 1024)).toFixed(2)} MB
+             </span>
+             <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+               {group.files.length - 1} redundant files
+             </span>
+          </div>
+          <div style={{ color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)', borderRadius: '50%', padding: '0.5rem', display: 'flex' }}>
+            {isOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+          </div>
+        </div>
+        <AnimatePresence>
+          {isOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ul className="file-list" style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                {group.files.map((f, i) => <FileItem key={i} f={f} />)}
+              </ul>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    );
   };
 
   const FileItem = ({ f }) => {
@@ -466,77 +516,42 @@ function App() {
         {/* Review Duplicates View */}
         {activeNav === 'review' && scanResult && (
           <div className="fade-in">
-            <h2>Review & Clean</h2>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
+              <h2 style={{ margin: 0 }}>Review & Clean</h2>
+              <button className="btn btn-magic" onClick={handleAutoSelect}>
+                <Wand2 size={16} /> Magic Auto-Select All
+              </button>
+            </div>
             
             {semanticResult && semanticResult.semantic_duplicates.length > 0 && (
               <div style={{marginBottom: '3rem'}}>
-                <h3 style={{display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#9d4edd'}}>
+                <h3 style={{display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#9d4edd', marginBottom: '1.5rem'}}>
                   <Brain size={20} /> AI Conceptual Matches
                 </h3>
                 {semanticResult.semantic_duplicates.map((group, idx) => (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 15 }} 
-                    animate={{ opacity: 1, y: 0 }} 
-                    transition={{ delay: idx * 0.05 }}
-                    key={idx} className="duplicate-group" style={{borderLeft: '4px solid #9d4edd'}}
-                  >
-                    <div className="group-header">
-                      <h4>{group.description}</h4>
-                      <span className="badge" style={{background: 'rgba(157, 78, 221, 0.2)', color: '#d8b4fe'}}>
-                        {(group.redundant_space / (1024 * 1024)).toFixed(2)} MB
-                      </span>
-                    </div>
-                    <ul className="file-list">
-                      {group.files.map((f, i) => <FileItem key={i} f={f} />)}
-                    </ul>
-                  </motion.div>
+                  <DuplicateGroup key={idx} group={group} title={group.description} colorClass={{background: 'rgba(157, 78, 221, 0.2)', color: '#d8b4fe'}} borderColor="#9d4edd" initialDelay={idx} />
                 ))}
               </div>
             )}
 
             {scanResult.near_duplicates.length > 0 && (
               <div style={{marginBottom: '3rem'}}>
-                <h3 style={{display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#5e6ad2'}}>
+                <h3 style={{display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#5e6ad2', marginBottom: '1.5rem'}}>
                   <ImageIcon size={20} /> Visually Similar Images
                 </h3>
                 {scanResult.near_duplicates.map((group, idx) => (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 15 }} 
-                    animate={{ opacity: 1, y: 0 }} 
-                    transition={{ delay: idx * 0.05 }}
-                    key={idx} className="duplicate-group" style={{borderLeft: '4px solid #5e6ad2'}}
-                  >
-                    <div className="group-header">
-                      <h4>Visual Group {idx + 1}</h4>
-                      <span className="badge" style={{background: 'rgba(94, 106, 210, 0.2)', color: '#a5b4fc'}}>
-                        {(group.redundant_space / (1024 * 1024)).toFixed(2)} MB
-                      </span>
-                    </div>
-                    <ul className="file-list">
-                      {group.files.map((f, i) => <FileItem key={i} f={f} />)}
-                    </ul>
-                  </motion.div>
+                  <DuplicateGroup key={idx} group={group} title={`Visual Group ${idx + 1}`} colorClass={{background: 'rgba(94, 106, 210, 0.2)', color: '#a5b4fc'}} borderColor="#5e6ad2" initialDelay={idx} />
                 ))}
               </div>
             )}
 
             {scanResult.duplicates.length > 0 && (
               <div>
-                <h3 style={{display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)'}}>
+                <h3 style={{display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', marginBottom: '1.5rem'}}>
                   <FileText size={20} /> Exact Duplicates
                 </h3>
                 {scanResult.duplicates.map((group, idx) => (
-                  <div key={idx} className="duplicate-group">
-                    <div className="group-header">
-                      <h4 style={{color: 'var(--text-muted)'}}>Hash: {group.hash.substring(0, 8)}...</h4>
-                      <span className="badge">
-                        {(group.redundant_space / (1024 * 1024)).toFixed(2)} MB
-                      </span>
-                    </div>
-                    <ul className="file-list">
-                      {group.files.map((f, i) => <FileItem key={i} f={f} />)}
-                    </ul>
-                  </div>
+                  <DuplicateGroup key={idx} group={group} title={`Hash: ${group.hash.substring(0, 8)}...`} colorClass={{}} borderColor="var(--border-light)" initialDelay={idx} />
                 ))}
               </div>
             )}
