@@ -422,15 +422,11 @@ export default function Dashboard() {
           </div>
           <div className={`nav-item ${activeNav === 'review' ? 'active' : ''}`} onClick={() => setActiveNav('review')} style={{position: 'relative'}}>
             <Copy size={18} /> <span>Review Duplicates</span>
-            {scanResult && (
-              <>
-                <div style={{marginLeft: 'auto', background: 'var(--brand-primary)', color: 'white', padding: '2px 8px', borderRadius: '99px', fontSize: '0.7rem', fontWeight: 600}}>
-                  {scanResult.analytics.duplicate_groups_count + scanResult.analytics.near_duplicate_groups_count + (semanticResult ? semanticResult.semantic_duplicates.length : 0)}
-                </div>
-                {activeNav !== 'review' && (
-                  <div style={{position: 'absolute', left: '10px', top: '12px', width: '6px', height: '6px', background: 'var(--brand-primary)', borderRadius: '50%', boxShadow: '0 0 8px var(--brand-primary)'}} />
-                )}
-              </>
+            <div style={{marginLeft: 'auto', background: 'rgba(100,116,139,0.2)', color: '#e2e8f0', padding: '2px 8px', borderRadius: '99px', fontSize: '0.7rem', fontWeight: 600}}>
+              {scanResult ? (scanResult.analytics.duplicate_groups_count + scanResult.analytics.near_duplicate_groups_count + (semanticResult ? semanticResult.semantic_duplicates.length : 0)) : '0'}
+            </div>
+            {scanResult && activeNav !== 'review' && (
+              <div style={{position: 'absolute', left: '10px', top: '12px', width: '6px', height: '6px', background: '#8B5CF6', borderRadius: '50%', boxShadow: '0 0 8px #8B5CF6'}} />
             )}
           </div>
         </div>
@@ -442,11 +438,9 @@ export default function Dashboard() {
           </div>
           <div className={`nav-item ${activeNav === 'zombies' ? 'active' : ''}`} onClick={() => setActiveNav('zombies')}>
             <Ghost size={18} /> <span>Zombie Files</span>
-            {zombies && zombies.length > 0 && (
-              <div style={{marginLeft: 'auto', background: 'rgba(255,255,255,0.1)', color: 'var(--text-muted)', padding: '2px 8px', borderRadius: '99px', fontSize: '0.7rem', fontWeight: 600}}>
-                {zombies.length}
-              </div>
-            )}
+            <div style={{marginLeft: 'auto', background: 'rgba(100,116,139,0.2)', color: '#e2e8f0', padding: '2px 8px', borderRadius: '99px', fontSize: '0.7rem', fontWeight: 600}}>
+              {zombies ? zombies.length : '0'}
+            </div>
           </div>
           <div className={`nav-item ${activeNav === 'prune' ? 'active' : ''}`} onClick={() => setActiveNav('prune')}>
             <FolderMinus size={18} /> <span>Prune Empty Folders</span>
@@ -476,14 +470,14 @@ export default function Dashboard() {
               onClick={handleSemanticScan} 
               disabled={isScanning || isSemanticScanning || !scanResult}
               style={!scanResult ? {
-                background: 'linear-gradient(135deg, rgba(30,30,35,0.8), rgba(20,20,25,0.8))',
-                color: 'var(--text-muted)',
-                boxShadow: '0 0 15px rgba(0,0,0,0.5)',
-                border: '1px solid rgba(255,255,255,0.05)',
+                background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(139, 92, 246, 0.03))',
+                color: '#8B5CF6',
+                boxShadow: '0 0 15px rgba(139, 92, 246, 0.15)',
+                border: '1px solid rgba(139, 92, 246, 0.25)',
                 transition: 'all 0.5s ease'
               } : {
-                background: 'var(--brand-gradient)',
-                boxShadow: '0 0 25px rgba(157, 78, 221, 0.5)',
+                background: 'linear-gradient(135deg, #8B5CF6, #6D28D9)',
+                boxShadow: '0 0 25px rgba(139, 92, 246, 0.5)',
                 border: '1px solid transparent',
                 color: 'white',
                 transition: 'all 0.5s ease'
@@ -536,8 +530,8 @@ export default function Dashboard() {
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-                <TiltCard className="stat-card" style={{ height: '100%', flexDirection: 'column', alignItems: 'flex-start', padding: '2rem', borderTop: '2px solid var(--brand-primary)', background: 'radial-gradient(circle at 10% 10%, rgba(94,106,210,0.08), transparent 60%), rgba(20,20,20,0.6)' }}>
-                  <motion.div whileHover={{ scale: 1.1, rotate: -5 }} style={{background: 'rgba(94,106,210, 0.1)', color: 'var(--brand-primary)', marginBottom: '1.5rem', width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                <TiltCard className="stat-card" style={{ height: '100%', flexDirection: 'column', alignItems: 'flex-start', padding: '2rem', borderTop: '2px solid #8B5CF6', background: 'radial-gradient(circle at 10% 10%, rgba(139,92,246,0.08), transparent 60%), rgba(20,20,20,0.6)' }}>
+                  <motion.div whileHover={{ scale: 1.1, rotate: -5 }} style={{background: 'rgba(139,92,246, 0.1)', color: '#8B5CF6', marginBottom: '1.5rem', width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(139,92,246,0.2)'}}>
                     <Brain size={24} />
                   </motion.div>
                   <div style={{ fontSize: '1.3rem', fontWeight: 600, marginBottom: '0.5rem' }}>Semantic AI Matching</div>
@@ -546,8 +540,8 @@ export default function Dashboard() {
               </motion.div>
 
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-                <TiltCard className="stat-card" style={{ height: '100%', flexDirection: 'column', alignItems: 'flex-start', padding: '2rem', borderTop: '2px solid var(--brand-primary)', background: 'radial-gradient(circle at 10% 10%, rgba(94,106,210,0.08), transparent 60%), rgba(20,20,20,0.6)' }}>
-                  <motion.div whileHover={{ scale: 1.1, rotate: 5 }} style={{background: 'rgba(94,106,210, 0.1)', color: 'var(--brand-primary)', marginBottom: '1.5rem', width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                <TiltCard className="stat-card" style={{ height: '100%', flexDirection: 'column', alignItems: 'flex-start', padding: '2rem', borderTop: '2px solid #8B5CF6', background: 'radial-gradient(circle at 10% 10%, rgba(139,92,246,0.08), transparent 60%), rgba(20,20,20,0.6)' }}>
+                  <motion.div whileHover={{ scale: 1.1, rotate: 5 }} style={{background: 'rgba(139,92,246, 0.1)', color: '#8B5CF6', marginBottom: '1.5rem', width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(139,92,246,0.2)'}}>
                     <Wand2 size={24} />
                   </motion.div>
                   <div style={{ fontSize: '1.3rem', fontWeight: 600, marginBottom: '0.5rem' }}>Smart Auto-Select</div>
@@ -556,8 +550,8 @@ export default function Dashboard() {
               </motion.div>
 
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-                <TiltCard className="stat-card" style={{ height: '100%', flexDirection: 'column', alignItems: 'flex-start', padding: '2rem', borderTop: '2px solid #64748b', background: 'radial-gradient(circle at 10% 10%, rgba(100,116,139,0.08), transparent 60%), rgba(20,20,20,0.6)' }}>
-                  <motion.div whileHover={{ scale: 1.1, rotate: -5 }} style={{background: 'rgba(100,116,139, 0.1)', color: '#64748b', marginBottom: '1.5rem', width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                <TiltCard className="stat-card" style={{ height: '100%', flexDirection: 'column', alignItems: 'flex-start', padding: '2rem', borderTop: '2px solid #64748B', background: 'radial-gradient(circle at 10% 10%, rgba(100,116,139,0.08), transparent 60%), rgba(20,20,20,0.6)' }}>
+                  <motion.div whileHover={{ scale: 1.1, rotate: -5 }} style={{background: 'rgba(100,116,139, 0.1)', color: '#64748B', marginBottom: '1.5rem', width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(100,116,139,0.2)'}}>
                     <Ghost size={24} />
                   </motion.div>
                   <div style={{ fontSize: '1.3rem', fontWeight: 600, marginBottom: '0.5rem' }}>Zombie File Pruning</div>
@@ -566,8 +560,8 @@ export default function Dashboard() {
               </motion.div>
 
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-                <TiltCard className="stat-card" style={{ height: '100%', flexDirection: 'column', alignItems: 'flex-start', padding: '2rem', borderTop: '2px solid #64748b', background: 'radial-gradient(circle at 10% 10%, rgba(100,116,139,0.08), transparent 60%), rgba(20,20,20,0.6)' }}>
-                  <motion.div whileHover={{ scale: 1.1, rotate: 5 }} style={{background: 'rgba(100,116,139, 0.1)', color: '#64748b', marginBottom: '1.5rem', width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                <TiltCard className="stat-card" style={{ height: '100%', flexDirection: 'column', alignItems: 'flex-start', padding: '2rem', borderTop: '2px solid #64748B', background: 'radial-gradient(circle at 10% 10%, rgba(100,116,139,0.08), transparent 60%), rgba(20,20,20,0.6)' }}>
+                  <motion.div whileHover={{ scale: 1.1, rotate: 5 }} style={{background: 'rgba(100,116,139, 0.1)', color: '#64748B', marginBottom: '1.5rem', width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(100,116,139,0.2)'}}>
                     <CheckCircle size={24} />
                   </motion.div>
                   <div style={{ fontSize: '1.3rem', fontWeight: 600, marginBottom: '0.5rem' }}>100% Secure Reclaim</div>
@@ -582,15 +576,15 @@ export default function Dashboard() {
                 <div className="glass-panel" style={{ display: 'flex', justifyContent: 'space-between', padding: '1.5rem 2.5rem', flexWrap: 'wrap', gap: '1rem' }}>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Files Scanned</span>
-                    <span style={{ fontSize: '1.4rem', fontWeight: 700 }}>-</span>
+                    <span style={{ fontSize: '1.4rem', fontWeight: 700 }}>0</span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Duplicates Found</span>
-                    <span style={{ fontSize: '1.4rem', fontWeight: 700 }}>-</span>
+                    <span style={{ fontSize: '1.4rem', fontWeight: 700 }}>0</span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Space Reclaimed</span>
-                    <span style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--success)' }}>0 GB</span>
+                    <span style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--success)' }}>0 MB</span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Last Scan Date</span>
