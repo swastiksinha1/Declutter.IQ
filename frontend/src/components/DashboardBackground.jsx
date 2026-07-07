@@ -51,8 +51,8 @@ export default function DashboardBackground() {
   return (
     <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: -1, pointerEvents: 'none', opacity: 0.9 }}>
       <Canvas camera={{ position: [0, 0, 10], fov: 45 }}>
-        <FloatingSpheres count={150} color="#9d4edd" scale={1} speed={1.5} />
-        <FloatingSpheres count={100} color="#5e6ad2" scale={2} speed={2} />
+        <FloatingSpheres count={150} color="#9d4edd" scale={1} speed={0.4} />
+        <FloatingSpheres count={100} color="#5e6ad2" scale={2} speed={0.6} />
       </Canvas>
     </div>
   );
