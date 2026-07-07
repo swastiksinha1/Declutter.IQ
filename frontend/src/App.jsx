@@ -376,7 +376,6 @@ function App() {
 
   return (
     <>
-      <FluidBackground isActive={true} />
       <div className="app-layout fade-in">
       
       {toast && (
