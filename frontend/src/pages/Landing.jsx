@@ -86,7 +86,7 @@ function DynamicLighting() {
   );
 }
 
-function FloatingFile({ initialPosition, color, speed, radiusOffset, iconType }) {
+function FloatingFile({ initialPosition, color, speed, radiusOffset, iconType, filename }) {
   const mesh = useRef();
   
   useFrame((state) => {
@@ -116,7 +116,7 @@ function FloatingFile({ initialPosition, color, speed, radiusOffset, iconType })
   });
 
   return (
-    <RoundedBox ref={mesh} position={initialPosition} args={[1.2, 1.6, 0.05]} radius={0.1} smoothness={2}>
+    <RoundedBox ref={mesh} position={initialPosition} args={[1.0, 1.4, 0.02]} radius={0.05} smoothness={2}>
       <meshStandardMaterial 
         color={color} 
         transparent={true}
@@ -124,15 +124,18 @@ function FloatingFile({ initialPosition, color, speed, radiusOffset, iconType })
         metalness={0.9} 
         roughness={0.1} 
       />
-      {/* Front Icon */}
+      {/* Front Icon and Text */}
       <Html transform position={[0, 0, 0.03]} distanceFactor={4}>
-        <div style={{ color: 'white', opacity: 0.9, filter: 'drop-shadow(0 0 15px rgba(255,255,255,0.6))' }}>
-          {iconType === 'file' && <FileText size={72} strokeWidth={1.5} />}
-          {iconType === 'audio' && <Music size={72} strokeWidth={1.5} />}
-          {iconType === 'folder' && <FolderOpen size={72} strokeWidth={1.5} />}
-          {iconType === 'spam' && <AlertTriangle size={72} strokeWidth={1.5} color="var(--danger)" />}
-          {iconType === 'image' && <ImageIcon size={72} strokeWidth={1.5} />}
-          {iconType === 'video' && <Video size={72} strokeWidth={1.5} />}
+        <div style={{ color: 'white', opacity: 0.9, filter: 'drop-shadow(0 0 15px rgba(255,255,255,0.6))', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          {iconType === 'file' && <FileText size={64} strokeWidth={1.5} />}
+          {iconType === 'audio' && <Music size={64} strokeWidth={1.5} />}
+          {iconType === 'folder' && <FolderOpen size={64} strokeWidth={1.5} />}
+          {iconType === 'spam' && <AlertTriangle size={64} strokeWidth={1.5} color="var(--danger)" />}
+          {iconType === 'image' && <ImageIcon size={64} strokeWidth={1.5} />}
+          {iconType === 'video' && <Video size={64} strokeWidth={1.5} />}
+          <div style={{ marginTop: '0.8rem', fontSize: '0.45rem', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', background: 'rgba(0,0,0,0.3)', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
+            {filename}
+          </div>
         </div>
       </Html>
     </RoundedBox>
@@ -245,11 +248,22 @@ export default function Landing() {
     const temp = [];
     const colors = ['#5e6ad2', '#d8b4fe', '#a5b4fc', '#ff453a', '#ffffff', '#9d4edd'];
     const types = ['file', 'audio', 'folder', 'spam', 'image', 'video'];
+    const names = {
+        'file': ['report.pdf', 'notes.txt', 'invoice.doc', 'data.csv'],
+        'audio': ['track.mp3', 'podcast.wav', 'beat.flac', 'voice.m4a'],
+        'folder': ['archives', 'backups', 'temp', 'downloads'],
+        'spam': ['cache.tmp', 'system.log', 'old.bak', 'debug.log'],
+        'image': ['photo.jpg', 'screenshot.png', 'vacation.webp', 'meme.gif'],
+        'video': ['movie.mp4', 'recording.avi', 'clip.mov', 'zoom.mp4']
+    };
     for (let i = 0; i < 35; i++) {
+      const type = types[Math.floor(Math.random() * types.length)];
+      const namePool = names[type];
       temp.push({
         initialPosition: [(Math.random() - 0.5) * 12, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 12],
         color: colors[Math.floor(Math.random() * colors.length)],
-        iconType: types[Math.floor(Math.random() * types.length)],
+        iconType: type,
+        filename: namePool[Math.floor(Math.random() * namePool.length)],
         speed: 0.8 + Math.random() * 1.5,
         radiusOffset: Math.random() * 4
       });

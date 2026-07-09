@@ -7,7 +7,7 @@ import {
 import MemoryGame from '../components/MemoryGame';
 import TiltCard from '../components/TiltCard';
 import ScanVisualizer from '../components/ScanVisualizer';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import AnimatedCounter from '../components/AnimatedCounter';
@@ -16,9 +16,30 @@ import CustomCursor from '../components/CustomCursor';
 import SignatureVisual from '../components/SignatureVisual';
 import SlotMachineIcon from '../components/SlotMachineIcon';
 
+function useSessionState(key, initialValue) {
+  const [state, setState] = useState(() => {
+    try {
+      const item = window.sessionStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      return initialValue;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(key, JSON.stringify(state));
+    } catch (error) {
+      console.error(error);
+    }
+  }, [key, state]);
+
+  return [state, setState];
+}
+
 export default function Dashboard() {
   const [activeNav, setActiveNav] = useState('dashboard');
-  const [directory, setDirectory] = useState('');
+  const [directory, setDirectory] = useSessionState('declutter_dir', '');
   const [defaultDir, setDefaultDir] = useState('');
   
   useEffect(() => {
@@ -40,12 +61,13 @@ export default function Dashboard() {
   // States
   const [isScanning, setIsScanning] = useState(false);
   const [isSemanticScanning, setIsSemanticScanning] = useState(false);
-  const [scanResult, setScanResult] = useState(null);
-  const [semanticResult, setSemanticResult] = useState(null);
+  const [scanResult, setScanResult] = useSessionState('declutter_scanResult', null);
+  const [semanticResult, setSemanticResult] = useSessionState('declutter_semanticResult', null);
+  const [scanHistory, setScanHistory] = useSessionState('declutter_history', []);
   const [error, setError] = useState('');
   
   // Stats state
-  const [sessionStats, setSessionStats] = useState({
+  const [sessionStats, setSessionStats] = useSessionState('declutter_sessionStats', {
     filesScanned: 0,
     duplicatesFound: 0,
     spaceReclaimedBytes: 0,
@@ -82,6 +104,13 @@ export default function Dashboard() {
   
   const [deletingFiles, setDeletingFiles] = useState(new Set());
 
+  const handleNewScan = () => {
+    setScanResult(null);
+    setSemanticResult(null);
+    setDirectory(defaultDir || '');
+    setActiveNav('dashboard');
+  };
+
   const handleScan = async () => {
     if (!directory) return;
     setIsScanning(true);
@@ -117,6 +146,15 @@ export default function Dashboard() {
       data.duplicates.forEach(group => group.files.slice(1).forEach(f => toSelect.add(f.path)));
       data.near_duplicates.forEach(group => group.files.slice(1).forEach(f => toSelect.add(f.path)));
       setSelectedFiles(toSelect);
+      
+      const newHistoryItem = {
+        id: Date.now(),
+        date: new Date().toLocaleString(),
+        directory,
+        scanResult: data,
+        semanticResult: null
+      };
+      setScanHistory(prev => [newHistoryItem, ...prev].slice(0, 3));
       
     } catch (err) {
       setError(err.message);
@@ -167,6 +205,15 @@ export default function Dashboard() {
       data.semantic_duplicates.forEach(group => group.files.slice(1).forEach(f => toSelect.add(f.path)));
       setSelectedFiles(toSelect);
       
+      setScanHistory(prev => {
+        if (prev.length > 0 && prev[0].directory === directory) {
+          const newHistory = [...prev];
+          newHistory[0] = { ...newHistory[0], semanticResult: data };
+          return newHistory;
+        }
+        return prev;
+      });
+
       setActiveNav('review');
       
     } catch (err) {
@@ -503,8 +550,17 @@ export default function Dashboard() {
         
         <div className="nav-section">Main</div>
         <div className="nav-links">
+          <div className="nav-item" onClick={handleNewScan} style={{color: 'var(--brand-primary)'}}>
+            <Sparkles size={18} /> <span>New Scan</span>
+          </div>
           <div className={`nav-item ${activeNav === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveNav('dashboard')}>
             <LayoutDashboard size={18} /> <span>Dashboard</span>
+          </div>
+          <div className={`nav-item ${activeNav === 'history' ? 'active' : ''}`} onClick={() => setActiveNav('history')}>
+            <FileText size={18} /> <span>Scan History</span>
+            <div style={{marginLeft: 'auto', background: 'rgba(100,116,139,0.2)', color: '#e2e8f0', padding: '2px 8px', borderRadius: '99px', fontSize: '0.7rem', fontWeight: 600}}>
+              {scanHistory.length}
+            </div>
           </div>
           <div className={`nav-item ${activeNav === 'review' ? 'active' : ''}`} onClick={() => setActiveNav('review')} style={{position: 'relative'}}>
             <Copy size={18} /> <span>Review Duplicates</span>
@@ -729,11 +785,14 @@ export default function Dashboard() {
               )}
             </div>
 
-            <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-              {/* Left Column: Chart */}
-              <TiltCard className="glass-panel" style={{ flex: '2', minWidth: '400px', display: 'flex', flexDirection: 'column' }}>
-                <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: 500 }}>Space Analysis</h3>
-                <div style={{ height: '320px', flexGrow: 1, position: 'relative' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2rem', marginBottom: '2rem' }}>
+              
+              {/* Chart 1: Space Analysis */}
+              <TiltCard className="glass-panel" style={{ display: 'flex', flexDirection: 'column', padding: '2rem' }}>
+                <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <PieChart size={18} color="#8B5CF6"/> Space Analysis
+                </h3>
+                <div style={{ height: '260px', flexGrow: 1, position: 'relative' }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -741,11 +800,21 @@ export default function Dashboard() {
                           { name: 'Wasted Space', value: scanResult.analytics.reclaimable_space_bytes },
                           { name: 'Unique Files', value: Math.max(0, (scanResult.analytics.total_files * 1024 * 1024) - scanResult.analytics.reclaimable_space_bytes) }
                         ]}
-                        cx="50%" cy="50%" innerRadius={90} outerRadius={125} paddingAngle={4} dataKey="value" stroke="none"
+                        cx="50%" cy="50%" innerRadius={70} outerRadius={100} paddingAngle={4} dataKey="value" stroke="none"
                       >
-                        <Cell fill="var(--danger)" />
-                        <Cell fill="var(--brand-primary)" />
+                        <Cell fill="url(#colorWasted)" />
+                        <Cell fill="url(#colorUnique)" />
                       </Pie>
+                      <defs>
+                        <linearGradient id="colorWasted" x1="0" y1="0" x2="1" y2="1">
+                          <stop offset="5%" stopColor="#ff453a" stopOpacity={0.9}/>
+                          <stop offset="95%" stopColor="#ff453a" stopOpacity={0.6}/>
+                        </linearGradient>
+                        <linearGradient id="colorUnique" x1="0" y1="0" x2="1" y2="1">
+                          <stop offset="5%" stopColor="#5e6ad2" stopOpacity={0.9}/>
+                          <stop offset="95%" stopColor="#5e6ad2" stopOpacity={0.6}/>
+                        </linearGradient>
+                      </defs>
                       <Tooltip formatter={(value) => `${(value / (1024 * 1024)).toFixed(2)} MB`} contentStyle={{ backgroundColor: 'rgba(15,15,15,0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', backdropFilter: 'blur(10px)', color: 'white' }} itemStyle={{ color: 'white' }} />
                       <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '0.9rem', color: 'var(--text-muted)' }} />
                     </PieChart>
@@ -753,29 +822,124 @@ export default function Dashboard() {
                 </div>
               </TiltCard>
 
-              {/* Right Column: Stats Grid */}
-              <div style={{ flex: '1', minWidth: '300px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1.5rem', alignContent: 'start' }}>
-                <TiltCard className="stat-card" style={{ padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
-                  <h3 style={{fontSize: '0.8rem'}}>Reclaimable</h3>
-                  <p className="stat-value highlight" style={{ fontSize: '1.8rem' }}>
-                    {(scanResult.analytics.reclaimable_space_bytes / (1024 * 1024)).toFixed(1)}<span style={{fontSize: '0.9rem', marginLeft: '4px'}}>MB</span>
-                  </p>
-                </TiltCard>
-                <TiltCard className="stat-card" style={{ padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
-                  <h3 style={{fontSize: '0.8rem'}}>Total Files</h3>
-                  <p className="stat-value" style={{ fontSize: '1.8rem' }}>{scanResult.analytics.total_files.toLocaleString()}</p>
-                </TiltCard>
-                <TiltCard className="stat-card" style={{ padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
-                  <h3 style={{fontSize: '0.8rem'}}>Exact Dupes</h3>
-                  <p className="stat-value" style={{ fontSize: '1.8rem' }}>{scanResult.analytics.duplicate_groups_count}</p>
-                </TiltCard>
-                <TiltCard className="stat-card" style={{ padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
-                  <h3 style={{fontSize: '0.8rem'}}>Visual Dupes</h3>
-                  <p className="stat-value" style={{ fontSize: '1.8rem' }}>{scanResult.analytics.near_duplicate_groups_count}</p>
-                </TiltCard>
-              </div>
+              {/* Chart 2: File Composition */}
+              <TiltCard className="glass-panel" style={{ display: 'flex', flexDirection: 'column', padding: '2rem' }}>
+                <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <FolderTree size={18} color="#32d74b"/> File Composition
+                </h3>
+                <div style={{ height: '260px', flexGrow: 1, position: 'relative' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={scanResult.analytics.file_type_breakdown || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                      <XAxis dataKey="name" stroke="rgba(255,255,255,0.4)" fontSize={11} tickLine={false} axisLine={false} />
+                      <YAxis stroke="rgba(255,255,255,0.4)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v/(1024*1024)).toFixed(0)}M`} />
+                      <Tooltip formatter={(value) => `${(value / (1024 * 1024)).toFixed(2)} MB`} cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{ backgroundColor: 'rgba(15,15,15,0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', backdropFilter: 'blur(10px)', color: 'white' }} />
+                      <defs>
+                        <linearGradient id="colorBar" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#32d74b" stopOpacity={0.9}/>
+                          <stop offset="100%" stopColor="#32d74b" stopOpacity={0.2}/>
+                        </linearGradient>
+                      </defs>
+                      <Bar dataKey="value" fill="url(#colorBar)" radius={[4, 4, 0, 0]} barSize={32} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </TiltCard>
+
+              {/* Chart 3: Storage Hogs */}
+              <TiltCard className="glass-panel" style={{ display: 'flex', flexDirection: 'column', padding: '2rem' }}>
+                <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <AlertTriangle size={18} color="#ffd60a"/> Storage Hogs
+                </h3>
+                <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto' }}>
+                  {(scanResult.analytics.top_large_files || []).map((file, idx) => (
+                    <motion.div 
+                      key={idx} 
+                      initial={{ opacity: 0, x: -10 }} 
+                      animate={{ opacity: 1, x: 0 }} 
+                      transition={{ delay: idx * 0.1 }}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.8rem', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', overflow: 'hidden' }}>
+                        <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(255, 214, 10, 0.15)', color: '#ffd60a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                          {idx + 1}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                          <span style={{ fontSize: '0.9rem', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{file.filename}</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{file.path}</span>
+                        </div>
+                      </div>
+                      <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#ffd60a', marginLeft: '1rem', whiteSpace: 'nowrap' }}>
+                        {(file.size / (1024 * 1024)).toFixed(1)} MB
+                      </span>
+                    </motion.div>
+                  ))}
+                  {(!scanResult.analytics.top_large_files || scanResult.analytics.top_large_files.length === 0) && (
+                    <div style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '2rem' }}>No large files found.</div>
+                  )}
+                </div>
+              </TiltCard>
+            </div>
+
+            {/* Bottom Stats Row */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem', alignContent: 'start' }}>
+              <TiltCard className="stat-card" style={{ padding: '1.5rem', background: 'rgba(20,20,20,0.4)', border: '1px solid rgba(255, 69, 58, 0.3)' }}>
+                <h3 style={{fontSize: '0.8rem'}}>Reclaimable Wasted</h3>
+                <p className="stat-value highlight" style={{ fontSize: '2rem', background: 'linear-gradient(135deg, #ff453a, #ff9f0a)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                  {(scanResult.analytics.reclaimable_space_bytes / (1024 * 1024)).toFixed(1)}<span style={{fontSize: '0.9rem', marginLeft: '4px'}}>MB</span>
+                </p>
+              </TiltCard>
+              <TiltCard className="stat-card" style={{ padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
+                <h3 style={{fontSize: '0.8rem'}}>Total Scanned Files</h3>
+                <p className="stat-value" style={{ fontSize: '2rem' }}>{scanResult.analytics.total_files.toLocaleString()}</p>
+              </TiltCard>
+              <TiltCard className="stat-card" style={{ padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
+                <h3 style={{fontSize: '0.8rem'}}>Exact Duplicates</h3>
+                <p className="stat-value" style={{ fontSize: '2rem' }}>{scanResult.analytics.duplicate_groups_count}</p>
+              </TiltCard>
+              <TiltCard className="stat-card" style={{ padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
+                <h3 style={{fontSize: '0.8rem'}}>Visual Duplicates</h3>
+                <p className="stat-value" style={{ fontSize: '2rem' }}>{scanResult.analytics.near_duplicate_groups_count}</p>
+              </TiltCard>
             </div>
           </motion.div>
+        )}
+
+        {/* History View */}
+        {activeNav === 'history' && (
+          <div className="fade-in">
+            <h2 style={{ marginBottom: '2rem' }}>Recent Scans</h2>
+            {scanHistory.length === 0 ? (
+              <div style={{ color: 'var(--text-muted)' }}>No scan history available yet. Run a scan to save it here!</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                {scanHistory.map((historyItem, idx) => (
+                  <TiltCard key={historyItem.id} className="glass-panel" style={{ padding: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--brand-primary)', fontWeight: 600, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '1px' }}>{historyItem.date}</div>
+                      <div style={{ fontSize: '1.2rem', fontWeight: 500, marginBottom: '0.25rem' }}>{historyItem.directory}</div>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                        Found {historyItem.scanResult?.analytics?.duplicate_groups_count || 0} exact duplicate groups
+                        {historyItem.semanticResult ? ' • Deep AI Scan included' : ''}
+                      </div>
+                    </div>
+                    <button 
+                      className="btn btn-magic"
+                      onClick={() => {
+                        setDirectory(historyItem.directory);
+                        setScanResult(historyItem.scanResult);
+                        setSemanticResult(historyItem.semanticResult);
+                        setActiveNav('dashboard');
+                        showToast(`Restored scan results for ${historyItem.directory}`);
+                      }}
+                    >
+                      Restore Scan
+                    </button>
+                  </TiltCard>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         {/* Review Duplicates View */}

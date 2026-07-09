@@ -41,13 +41,43 @@ def run_scan():
         total_files = len(files_metadata)
         reclaimable_space_bytes = sum(g['redundant_space'] for g in exact_duplicates) + sum(g['redundant_space'] for g in near_duplicates)
 
+        categories_map = {
+            'Images': {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'},
+            'Documents': {'.pdf', '.doc', '.docx', '.txt', '.csv', '.xlsx', '.ppt', '.pptx'},
+            'Videos': {'.mp4', '.mkv', '.avi', '.mov', '.wmv'},
+            'Archives': {'.zip', '.rar', '.7z', '.tar', '.gz'},
+            'Audio': {'.mp3', '.wav', '.flac', '.aac', '.ogg'},
+            'Code': {'.py', '.js', '.html', '.css', '.json', '.md', '.jsx', '.ts', '.tsx', '.c', '.cpp', '.java'}
+        }
+        
+        category_sizes = {cat: 0 for cat in categories_map.keys()}
+        category_sizes['Others'] = 0
+        
+        for f in files_metadata:
+            ext = f.get('extension', '').lower()
+            matched = False
+            for cat, exts in categories_map.items():
+                if ext in exts:
+                    category_sizes[cat] += f.get('size', 0)
+                    matched = True
+                    break
+            if not matched:
+                category_sizes['Others'] += f.get('size', 0)
+                
+        file_type_breakdown = [{"name": k, "value": v} for k, v in category_sizes.items() if v > 0]
+        file_type_breakdown.sort(key=lambda x: x['value'], reverse=True)
+        
+        top_large_files = sorted(files_metadata, key=lambda x: x.get('size', 0), reverse=True)[:5]
+
         return jsonify({
             "status": "success",
             "analytics": {
                 "total_files": total_files,
                 "duplicate_groups_count": len(exact_duplicates),
                 "near_duplicate_groups_count": len(near_duplicates),
-                "reclaimable_space_bytes": reclaimable_space_bytes
+                "reclaimable_space_bytes": reclaimable_space_bytes,
+                "file_type_breakdown": file_type_breakdown,
+                "top_large_files": top_large_files
             },
             "duplicates": exact_duplicates,
             "near_duplicates": near_duplicates
