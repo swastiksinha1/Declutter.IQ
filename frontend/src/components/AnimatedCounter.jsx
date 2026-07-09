@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useMotionValue, useSpring } from 'framer-motion';
 
-export default function AnimatedCounter({ value, suffix = "", duration = 800 }) {
+export default function AnimatedCounter({ value, suffix = "", decimals = 0, duration = 800 }) {
   const ref = useRef(null);
   const motionValue = useMotionValue(0);
   
@@ -23,14 +23,18 @@ export default function AnimatedCounter({ value, suffix = "", duration = 800 }) 
     
     return springValue.on("change", (latest) => {
       if (ref.current) {
-        ref.current.textContent = Intl.NumberFormat('en-US').format(Math.floor(latest)) + suffix;
+        if (decimals > 0) {
+          ref.current.textContent = Number(latest).toFixed(decimals);
+        } else {
+          ref.current.textContent = Intl.NumberFormat('en-US').format(Math.floor(latest));
+        }
       }
     });
-  }, [springValue, value, suffix]);
+  }, [springValue, value, decimals]);
 
   if (typeof value !== 'number') {
-    return <span>{value}{suffix}</span>;
+    return <>{value}{suffix}</>;
   }
 
-  return <span ref={ref}>{0}{suffix}</span>;
+  return <><span ref={ref}>0</span>{suffix}</>;
 }

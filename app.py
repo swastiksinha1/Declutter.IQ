@@ -59,10 +59,12 @@ def run_scan():
             for cat, exts in categories_map.items():
                 if ext in exts:
                     category_sizes[cat] += f.get('size', 0)
+                    f['category'] = cat
                     matched = True
                     break
             if not matched:
                 category_sizes['Others'] += f.get('size', 0)
+                f['category'] = 'Others'
                 
         file_type_breakdown = [{"name": k, "value": v} for k, v in category_sizes.items() if v > 0]
         file_type_breakdown.sort(key=lambda x: x['value'], reverse=True)
@@ -77,7 +79,8 @@ def run_scan():
                 "near_duplicate_groups_count": len(near_duplicates),
                 "reclaimable_space_bytes": reclaimable_space_bytes,
                 "file_type_breakdown": file_type_breakdown,
-                "top_large_files": top_large_files
+                "top_large_files": top_large_files,
+                "all_files": files_metadata
             },
             "duplicates": exact_duplicates,
             "near_duplicates": near_duplicates

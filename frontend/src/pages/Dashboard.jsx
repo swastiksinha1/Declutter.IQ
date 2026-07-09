@@ -1,13 +1,14 @@
 import { useState, useMemo, useEffect } from 'react';
+import { jsPDF } from "jspdf";
 import { 
   LayoutDashboard, Copy, Settings, Trash2, Search, Brain, 
   ImageIcon, FileText, CheckCircle, FolderTree, Ghost, 
-  Cloud, Sparkles, FolderMinus, Loader, AlertTriangle, ChevronDown, ChevronUp, Wand2, Lock
+  Cloud, Sparkles, FolderMinus, Loader, AlertTriangle, ChevronDown, ChevronUp, Wand2, Lock, TrendingUp
 } from 'lucide-react';
 import MemoryGame from '../components/MemoryGame';
 import TiltCard from '../components/TiltCard';
 import ScanVisualizer from '../components/ScanVisualizer';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, AreaChart, Area } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import AnimatedCounter from '../components/AnimatedCounter';
@@ -15,6 +16,7 @@ import RippleButton from '../components/RippleButton';
 import CustomCursor from '../components/CustomCursor';
 import SignatureVisual from '../components/SignatureVisual';
 import SlotMachineIcon from '../components/SlotMachineIcon';
+import DuplicatePreviewPopover from '../components/DuplicatePreviewPopover';
 
 function useSessionState(key, initialValue) {
   const [state, setState] = useState(() => {
@@ -36,6 +38,52 @@ function useSessionState(key, initialValue) {
 
   return [state, setState];
 }
+
+const formatRelativeTime = (mtimeSecs) => {
+  if (!mtimeSecs) return { text: 'Unknown', bg: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.4)' };
+  const now = Date.now();
+  const fileTime = mtimeSecs * 1000;
+  const diffDays = Math.floor((now - fileTime) / (1000 * 60 * 60 * 24));
+  let text = '';
+  if (diffDays === 0) text = 'Today';
+  else if (diffDays === 1) text = 'Yesterday';
+  else if (diffDays < 30) text = `${diffDays} days ago`;
+  else if (diffDays < 365) text = `${Math.floor(diffDays / 30)} months ago`;
+  else text = `${Math.floor(diffDays / 365)} years ago`;
+  
+  let color = 'rgba(255, 69, 58, 0.15)'; // Red for old files
+  let textColor = '#ff453a';
+  if (diffDays < 30) { color = 'rgba(50, 215, 75, 0.15)'; textColor = '#32d74b'; }
+  else if (diffDays <= 90) { color = 'rgba(255, 214, 10, 0.15)'; textColor = '#ffd60a'; }
+  return { text, bg: color, color: textColor };
+};
+
+const getFlagReason = (file) => {
+  const ext = file.extension?.toLowerCase() || '';
+  const now = Date.now();
+  const fileTime = file.mtime ? file.mtime * 1000 : now;
+  const diffDays = Math.floor((now - fileTime) / (1000 * 60 * 60 * 24));
+  
+  if (['.exe', '.dmg', '.pkg', '.msi'].includes(ext)) {
+    return "Installer — likely unused";
+  }
+  if (['.mp4', '.mov', '.mkv', '.avi'].includes(ext)) {
+    if (diffDays > 30) return "Large video, not opened recently";
+    return "Large video file";
+  }
+  if (['.zip', '.rar', '.tar', '.gz', '.7z'].includes(ext)) {
+    if (diffDays > 30) return "Old archive — consider extracting or deleting";
+    return "Archive file";
+  }
+  if (['.iso', '.img'].includes(ext)) {
+    return "Disk image — takes up significant space";
+  }
+  
+  if (diffDays > 90) {
+    return "Old file taking up significant space";
+  }
+  return "Taking up significant space";
+};
 
 export default function Dashboard() {
   const [activeNav, setActiveNav] = useState('dashboard');
@@ -63,9 +111,13 @@ export default function Dashboard() {
   const [isSemanticScanning, setIsSemanticScanning] = useState(false);
   const [scanResult, setScanResult] = useSessionState('declutter_scanResult', null);
   const [semanticResult, setSemanticResult] = useSessionState('declutter_semanticResult', null);
-  const [scanHistory, setScanHistory] = useSessionState('declutter_history', []);
+  const [scanHistory, setScanHistory] = useSessionState('scan_history', []);
+  const [recentlyDeleted, setRecentlyDeleted] = useSessionState('recently_deleted', []);
   const [error, setError] = useState('');
-  
+  const [chartFilter, setChartFilter] = useState(null);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [reclaimHistory, setReclaimHistory] = useSessionState('declutter_reclaim_history', []);
+
   // Stats state
   const [sessionStats, setSessionStats] = useSessionState('declutter_sessionStats', {
     filesScanned: 0,
@@ -73,6 +125,40 @@ export default function Dashboard() {
     spaceReclaimedBytes: 0,
     lastScanDate: 'Never'
   });
+
+  const historicalReclaimedData = useMemo(() => {
+    if (reclaimHistory.length === 0) {
+      return [{ date: 'Today', mbReclaimed: 0 }];
+    }
+    return reclaimHistory.map(entry => ({
+      date: entry.date,
+      mbReclaimed: Math.round(entry.mbReclaimed)
+    }));
+  }, [reclaimHistory]);
+
+  const filteredFiles = useMemo(() => {
+    if (!chartFilter || !scanResult?.analytics?.all_files) return [];
+    
+    if (chartFilter.type === 'composition') {
+      return scanResult.analytics.all_files.filter(f => f.category === chartFilter.value);
+    }
+    if (chartFilter.type === 'space') {
+      if (chartFilter.value === 'Wasted Space') {
+        const redundant = new Set();
+        if (scanResult.duplicates) scanResult.duplicates.forEach(g => g.files.slice(1).forEach(f => redundant.add(f.path)));
+        if (scanResult.near_duplicates) scanResult.near_duplicates.forEach(g => g.files.slice(1).forEach(f => redundant.add(f.path)));
+        return scanResult.analytics.all_files.filter(f => redundant.has(f.path));
+      }
+      if (chartFilter.value === 'Unique Files') {
+        const redundant = new Set();
+        if (scanResult.duplicates) scanResult.duplicates.forEach(g => g.files.slice(1).forEach(f => redundant.add(f.path)));
+        if (scanResult.near_duplicates) scanResult.near_duplicates.forEach(g => g.files.slice(1).forEach(f => redundant.add(f.path)));
+        return scanResult.analytics.all_files.filter(f => !redundant.has(f.path));
+      }
+    }
+    return [];
+  }, [chartFilter, scanResult]);
+  
   
   // Custom cursor state
   const [isHoveringScan, setIsHoveringScan] = useState(false);
@@ -232,25 +318,63 @@ export default function Dashboard() {
   
   const { selectedSize, selectedCount } = useMemo(() => {
     let size = 0; let count = 0;
-    const uniqueFiles = new Map();
     
-    const addGroup = (group) => {
-      group.files.forEach(f => {
-        if (selectedFiles.has(f.path) && !uniqueFiles.has(f.path)) {
-          uniqueFiles.set(f.path, f.size);
+    if (scanResult?.analytics?.all_files) {
+      scanResult.analytics.all_files.forEach(f => {
+        if (selectedFiles.has(f.path)) {
           size += f.size; count += 1;
         }
       });
-    };
-    
-    if (scanResult) {
-      scanResult.duplicates.forEach(addGroup);
-      scanResult.near_duplicates.forEach(addGroup);
+    } else {
+      const uniqueFiles = new Map();
+      const addGroup = (group) => {
+        group.files.forEach(f => {
+          if (selectedFiles.has(f.path) && !uniqueFiles.has(f.path)) {
+            uniqueFiles.set(f.path, f.size);
+            size += f.size; count += 1;
+          }
+        });
+      };
+      
+      if (scanResult) {
+        scanResult.duplicates.forEach(addGroup);
+        scanResult.near_duplicates.forEach(addGroup);
+      }
+      if (semanticResult) semanticResult.semantic_duplicates.forEach(addGroup);
     }
-    if (semanticResult) semanticResult.semantic_duplicates.forEach(addGroup);
     
     return { selectedSize: size, selectedCount: count };
   }, [selectedFiles, scanResult, semanticResult]);
+
+  const stageForDeletion = (filesToStage) => {
+    const now = Date.now();
+    setRecentlyDeleted(prev => {
+      const existingPaths = new Set(prev.map(f => f.path));
+      const newFiles = filesToStage.filter(f => !existingPaths.has(f.path)).map(f => ({ ...f, deletedAt: now }));
+      return [...newFiles, ...prev];
+    });
+    
+    setScanResult(prev => {
+       if (!prev) return prev;
+       const filterGroup = g => ({ ...g, files: g.files.filter(f => !selectedFiles.has(f.path)) });
+       const newAllFiles = prev.analytics?.all_files ? prev.analytics.all_files.filter(f => !selectedFiles.has(f.path)) : undefined;
+       return {
+         ...prev,
+         analytics: prev.analytics ? { ...prev.analytics, all_files: newAllFiles } : prev.analytics,
+         duplicates: prev.duplicates.map(filterGroup).filter(g => g.files.length > 1),
+         near_duplicates: prev.near_duplicates.map(filterGroup).filter(g => g.files.length > 1)
+       };
+    });
+    if (semanticResult) {
+      setSemanticResult(prev => {
+         const filterGroup = g => ({ ...g, files: g.files.filter(f => !selectedFiles.has(f.path)) });
+         return {
+           ...prev,
+           semantic_duplicates: prev.semantic_duplicates.map(filterGroup).filter(g => g.files.length > 1)
+         };
+      });
+    }
+  };
 
   const handleDelete = async () => {
     setIsDeleting(true);
@@ -260,33 +384,126 @@ export default function Dashboard() {
     await new Promise(r => setTimeout(r, 800));
     
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ files: Array.from(selectedFiles) }),
-      });
-      
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Delete failed');
+      const filesToStage = [];
+      if (scanResult?.analytics?.all_files) {
+        scanResult.analytics.all_files.forEach(f => {
+          if (selectedFiles.has(f.path)) {
+            if (!filesToStage.find(staged => staged.path === f.path)) filesToStage.push(f);
+          }
+        });
+      } else {
+        const addGroup = (group) => {
+          group.files.forEach(f => {
+            if (selectedFiles.has(f.path)) {
+              if (!filesToStage.find(staged => staged.path === f.path)) filesToStage.push(f);
+            }
+          });
+        };
+        if (scanResult) {
+          scanResult.duplicates.forEach(addGroup);
+          scanResult.near_duplicates.forEach(addGroup);
+        }
+        if (semanticResult) semanticResult.semantic_duplicates.forEach(addGroup);
+      }
+
+      stageForDeletion(filesToStage);
       
       setIsModalOpen(false);
-      setToast(`Safely moved ${data.deleted_count} files to Recycle Bin! Reclaimed ${(data.reclaimed_space_bytes / (1024*1024)).toFixed(2)} MB.`);
+      const reclaimedSpace = filesToStage.reduce((acc, f) => acc + f.size, 0);
+      setToast(`Staged ${filesToStage.length} files in Recently Deleted! Reclaimed ${(reclaimedSpace / (1024*1024)).toFixed(2)} MB.`);
       setTimeout(() => setToast(''), 5000);
       
       setSessionStats(prev => ({
         ...prev,
-        spaceReclaimedBytes: prev.spaceReclaimedBytes + data.reclaimed_space_bytes
+        spaceReclaimedBytes: prev.spaceReclaimedBytes + reclaimedSpace
       }));
+      
+      const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      setReclaimHistory(prev => {
+        const newHistory = [...prev];
+        const todayEntryIndex = newHistory.findIndex(entry => entry.date === today);
+        const reclaimedMB = reclaimedSpace / (1024 * 1024);
+        if (todayEntryIndex >= 0) {
+          newHistory[todayEntryIndex] = {
+            ...newHistory[todayEntryIndex],
+            mbReclaimed: newHistory[todayEntryIndex].mbReclaimed + reclaimedMB
+          };
+        } else {
+          newHistory.push({ date: today, mbReclaimed: reclaimedMB });
+        }
+        return newHistory;
+      });
       
       setSelectedFiles(new Set());
       setDeletingFiles(new Set());
-      handleScan();
     } catch (err) {
       alert("Delete error: " + err.message);
     } finally {
       setIsDeleting(false);
       setDeletingFiles(new Set());
     }
+  };
+
+  const handleExportCSV = () => {
+    if (!scanResult) return;
+    const { analytics } = scanResult;
+    let csv = "Declutter.IQ - Scan Report\n\n";
+    csv += `Total Files Scanned,${analytics.total_files}\n`;
+    csv += `Reclaimable Space (MB),${(analytics.reclaimable_space_bytes / (1024*1024)).toFixed(2)}\n`;
+    csv += `Duplicate Groups,${analytics.duplicate_groups_count}\n`;
+    csv += `Near Duplicate Groups,${analytics.near_duplicate_groups_count}\n\n`;
+    
+    csv += "Top Storage Hogs\n";
+    csv += "Filename,Path,Size (MB)\n";
+    if (analytics.top_large_files) {
+      analytics.top_large_files.forEach(f => {
+        csv += `"${f.filename}","${f.path}",${(f.size / (1024*1024)).toFixed(2)}\n`;
+      });
+    }
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Declutter_Report_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportPDF = () => {
+    if (!scanResult) return;
+    const doc = new jsPDF();
+    const { analytics } = scanResult;
+    
+    doc.setFontSize(18);
+    doc.text("Declutter.IQ - Scan Report", 20, 20);
+    
+    doc.setFontSize(12);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, 20, 30);
+    
+    doc.text("Summary:", 20, 45);
+    doc.setFontSize(10);
+    doc.text(`Total Files Scanned: ${analytics.total_files}`, 25, 55);
+    doc.text(`Reclaimable Space: ${(analytics.reclaimable_space_bytes / (1024*1024)).toFixed(2)} MB`, 25, 62);
+    doc.text(`Duplicate Groups: ${analytics.duplicate_groups_count}`, 25, 69);
+    doc.text(`Near Duplicate Groups: ${analytics.near_duplicate_groups_count}`, 25, 76);
+    
+    doc.setFontSize(12);
+    doc.text("Top Storage Hogs:", 20, 95);
+    doc.setFontSize(9);
+    
+    let y = 105;
+    if (analytics.top_large_files) {
+      analytics.top_large_files.forEach((f, i) => {
+        doc.text(`${i+1}. ${f.filename} (${(f.size / (1024*1024)).toFixed(2)} MB)`, 25, y);
+        doc.setTextColor(100);
+        doc.text(f.path, 25, y + 5);
+        doc.setTextColor(0);
+        y += 15;
+      });
+    }
+    
+    doc.save(`Declutter_Report_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   const showToast = (msg) => {
@@ -409,22 +626,23 @@ export default function Dashboard() {
       <motion.div 
         initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: initialDelay * 0.05 }}
         className="duplicate-group" style={{ borderLeft: `4px solid ${borderColor}`, cursor: 'pointer', overflow: 'hidden', padding: '1.2rem', marginBottom: '1rem', background: 'rgba(20,20,20,0.4)', borderRadius: '12px' }}
-        onClick={() => setIsOpen(!isOpen)}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-             <h4 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--text-main)' }}>{title}</h4>
-             <span className="badge" style={{ ...colorClass, padding: '0.3rem 0.8rem' }}>
-               {(group.redundant_space / (1024 * 1024)).toFixed(2)} MB
-             </span>
-             <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-               {group.files.length - 1} redundant files
-             </span>
+        <DuplicatePreviewPopover group={group}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }} onClick={() => setIsOpen(!isOpen)}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+               <h4 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--text-main)' }}>{title}</h4>
+               <span className="badge" style={{ ...colorClass, padding: '0.3rem 0.8rem' }}>
+                 <AnimatedCounter value={group.redundant_space / (1024 * 1024)} decimals={2} suffix=" MB" />
+               </span>
+               <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                 {group.files.length - 1} redundant files
+               </span>
+            </div>
+            <div style={{ color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)', borderRadius: '50%', padding: '0.5rem', display: 'flex' }}>
+              {isOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+            </div>
           </div>
-          <div style={{ color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)', borderRadius: '50%', padding: '0.5rem', display: 'flex' }}>
-            {isOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-          </div>
-        </div>
+        </DuplicatePreviewPopover>
         <AnimatePresence>
           {isOpen && (
             <motion.div
@@ -489,18 +707,23 @@ export default function Dashboard() {
             onClick={() => setPreviewFile(f)}
           />
         )}
-        <div className="file-info" style={{marginLeft: '1rem', flex: 1}}>
-          <span 
-            className="filename" 
-            style={{cursor: isImg ? 'pointer' : 'default', fontWeight: '500', color: isImg ? 'var(--text-main)' : 'var(--text-muted)'}} 
-            onClick={() => isImg ? setPreviewFile(f) : null}
-          >
-            {f.filename}
-          </span>
-          <br/>
+        <div className="file-info" style={{marginLeft: '1rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.2rem', justifyContent: 'center'}}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+            <span 
+              className="filename" 
+              style={{cursor: isImg ? 'pointer' : 'default', fontWeight: '500', color: isImg ? 'var(--text-main)' : 'var(--text-muted)'}} 
+              onClick={() => isImg ? setPreviewFile(f) : null}
+            >
+              {f.filename}
+            </span>
+            {(() => {
+              const timeTag = formatRelativeTime(f.mtime);
+              return <span style={{ background: timeTag.bg, color: timeTag.color, padding: '0.1rem 0.5rem', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 600, whiteSpace: 'nowrap' }}>{timeTag.text}</span>;
+            })()}
+          </div>
           <span className="filepath" style={{opacity: 0.5, fontSize: '0.8rem', color: 'var(--text-muted)'}}>{f.path}</span>
         </div>
-        <span style={{fontSize: '0.85rem', color: 'var(--text-muted)', marginRight: '1rem'}}>{(f.size / 1024).toFixed(1)} KB</span>
+        <span style={{fontSize: '0.85rem', color: 'var(--text-muted)', marginRight: '1rem'}}><AnimatedCounter value={f.size / 1024} decimals={1} suffix=" KB" /></span>
         <button className="btn btn-ghost" style={{padding: '0.4rem 0.8rem', fontSize: '0.8rem'}} onClick={() => { setRenameTarget(f); setNewName(f.filename); }}>
           <Sparkles size={14} style={{color: '#9d4edd'}} /> Rename
         </button>
@@ -575,6 +798,14 @@ export default function Dashboard() {
 
         <div className="nav-section" style={{marginTop: '2rem'}}>Tools</div>
         <div className="nav-links">
+          <div className={`nav-item ${activeNav === 'trash' ? 'active' : ''}`} onClick={() => setActiveNav('trash')}>
+            <Trash2 size={18} /> <span>Recently Deleted</span>
+            {recentlyDeleted.length > 0 && (
+              <div style={{marginLeft: 'auto', background: 'rgba(255, 69, 58, 0.2)', color: '#ff453a', padding: '2px 8px', borderRadius: '99px', fontSize: '0.7rem', fontWeight: 600}}>
+                {recentlyDeleted.length}
+              </div>
+            )}
+          </div>
           <div className={`nav-item ${activeNav === 'categorize' ? 'active' : ''}`} onClick={() => setActiveNav('categorize')}>
             <FolderTree size={18} /> <span>Auto-Categorize</span>
           </div>
@@ -596,10 +827,21 @@ export default function Dashboard() {
       <main className="main-content">
         <CustomCursor isVisible={isHoveringScan} />
         
-        <div className="glass-panel" style={{marginBottom: (!scanResult && !isScanning && !isSemanticScanning) ? '1.5rem' : '3rem', transition: 'margin 0.4s ease'}}>
+        <div className="glass-panel" style={{
+          marginBottom: (!scanResult && !isScanning && !isSemanticScanning) ? '1.5rem' : '3rem', 
+          transition: 'margin 0.4s ease',
+          position: 'sticky',
+          top: '2rem',
+          zIndex: 50,
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '1rem'
+        }}>
           <div 
             className="scan-bar" 
-            style={{ position: 'relative', overflow: 'hidden', cursor: isHoveringScan ? 'none' : 'default' }}
+            style={{ flex: 1, position: 'relative', overflow: 'hidden', cursor: isHoveringScan ? 'none' : 'default', minWidth: '300px' }}
             onMouseEnter={() => setIsHoveringScan(true)}
             onMouseLeave={() => setIsHoveringScan(false)}
           >
@@ -665,12 +907,33 @@ export default function Dashboard() {
             </RippleButton>
           </div>
           {directory && defaultDir && directory === defaultDir && (
-            <div style={{fontSize: '0.85rem', color: 'var(--text)', opacity: 0.7, marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem'}}>
+            <div style={{fontSize: '0.85rem', color: 'var(--text)', opacity: 0.7, marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem', width: '100%'}}>
               <Sparkles size={14} style={{color: 'var(--primary)'}} /> 
               <span>Auto-detected your system's default Downloads folder as the most common source of clutter.</span>
             </div>
           )}
-          {error && <div style={{color: 'var(--danger)', marginTop: '1rem', fontWeight: 500}}>{error}</div>}
+          {error && <div style={{color: 'var(--danger)', marginTop: '1rem', fontWeight: 500, width: '100%'}}>{error}</div>}
+
+          {scanResult && !isScanning && !isSemanticScanning && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ position: 'relative' }}>
+                <button className="btn btn-ghost" onClick={() => setIsExportMenuOpen(!isExportMenuOpen)} style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <FileText size={16} /> Export Report <ChevronDown size={14} />
+                </button>
+                {isExportMenuOpen && (
+                  <div className="glass-panel fade-in" style={{ position: 'absolute', top: '100%', right: 0, marginTop: '0.5rem', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', zIndex: 100, minWidth: '150px' }}>
+                    <button className="btn btn-ghost" style={{ textAlign: 'left', padding: '0.5rem 1rem' }} onClick={() => { handleExportCSV(); setIsExportMenuOpen(false); }}>Download CSV</button>
+                    <button className="btn btn-ghost" style={{ textAlign: 'left', padding: '0.5rem 1rem' }} onClick={() => { handleExportPDF(); setIsExportMenuOpen(false); }}>Download PDF</button>
+                  </div>
+                )}
+              </div>
+              {scanResult.analytics.reclaimable_space_bytes > 0 && (
+                 <div className="badge" style={{background: 'rgba(255, 69, 58, 0.15)', color: 'var(--danger)', padding: '0.5rem 1rem', fontSize: '0.85rem'}}>
+                    Clutter Detected
+                 </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Dashboard View */}
@@ -776,16 +1039,15 @@ export default function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
+            <div style={{ marginBottom: '2rem' }}>
               <h2 style={{ margin: 0 }}>Storage Overview</h2>
-              {scanResult.analytics.reclaimable_space_bytes > 0 && (
-                 <div className="badge" style={{background: 'rgba(255, 69, 58, 0.15)', color: 'var(--danger)', padding: '0.5rem 1rem', fontSize: '0.85rem'}}>
-                    Clutter Detected
-                 </div>
-              )}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2rem', marginBottom: '2rem' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', marginBottom: '2rem' }}>
+              
+              {/* Left Section: Charts & Filtered Results */}
+              <div style={{ flex: '1 1 700px', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2rem' }}>
               
               {/* Chart 1: Space Analysis */}
               <TiltCard className="glass-panel" style={{ display: 'flex', flexDirection: 'column', padding: '2rem' }}>
@@ -801,6 +1063,8 @@ export default function Dashboard() {
                           { name: 'Unique Files', value: Math.max(0, (scanResult.analytics.total_files * 1024 * 1024) - scanResult.analytics.reclaimable_space_bytes) }
                         ]}
                         cx="50%" cy="50%" innerRadius={70} outerRadius={100} paddingAngle={4} dataKey="value" stroke="none"
+                        onClick={(data) => setChartFilter({ type: 'space', value: data.name })}
+                        style={{ cursor: 'pointer' }}
                       >
                         <Cell fill="url(#colorWasted)" />
                         <Cell fill="url(#colorUnique)" />
@@ -840,7 +1104,7 @@ export default function Dashboard() {
                           <stop offset="100%" stopColor="#32d74b" stopOpacity={0.2}/>
                         </linearGradient>
                       </defs>
-                      <Bar dataKey="value" fill="url(#colorBar)" radius={[4, 4, 0, 0]} barSize={32} />
+                      <Bar dataKey="value" fill="url(#colorBar)" radius={[4, 4, 0, 0]} barSize={32} onClick={(data) => setChartFilter({ type: 'composition', value: data.name })} style={{ cursor: 'pointer' }} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -851,7 +1115,7 @@ export default function Dashboard() {
                 <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <AlertTriangle size={18} color="#ffd60a"/> Storage Hogs
                 </h3>
-                <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto' }}>
+                <div className="custom-scrollbar" style={{ height: '260px', flexGrow: 1, display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', paddingRight: '0.5rem' }}>
                   {(scanResult.analytics.top_large_files || []).map((file, idx) => (
                     <motion.div 
                       key={idx} 
@@ -864,13 +1128,22 @@ export default function Dashboard() {
                         <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(255, 214, 10, 0.15)', color: '#ffd60a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
                           {idx + 1}
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                          <span style={{ fontSize: '0.9rem', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{file.filename}</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', gap: '0.2rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                            <span style={{ fontSize: '0.9rem', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{file.filename}</span>
+                            {(() => {
+                              const timeTag = formatRelativeTime(file.mtime);
+                              return <span style={{ background: timeTag.bg, color: timeTag.color, padding: '0.1rem 0.4rem', borderRadius: '10px', fontSize: '0.65rem', fontWeight: 600, whiteSpace: 'nowrap' }}>{timeTag.text}</span>;
+                            })()}
+                          </div>
                           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{file.path}</span>
+                          <span style={{ display: 'inline-block', marginTop: '0.2rem', padding: '0.2rem 0.6rem', borderRadius: '6px', background: 'rgba(157, 78, 221, 0.15)', color: '#d8b4fe', fontSize: '0.65rem', fontWeight: 500, width: 'fit-content' }}>
+                            {getFlagReason(file)}
+                          </span>
                         </div>
                       </div>
                       <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#ffd60a', marginLeft: '1rem', whiteSpace: 'nowrap' }}>
-                        {(file.size / (1024 * 1024)).toFixed(1)} MB
+                        <AnimatedCounter value={file.size / (1024 * 1024)} decimals={1} suffix=" MB" />
                       </span>
                     </motion.div>
                   ))}
@@ -879,28 +1152,90 @@ export default function Dashboard() {
                   )}
                 </div>
               </TiltCard>
-            </div>
 
-            {/* Bottom Stats Row */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem', alignContent: 'start' }}>
-              <TiltCard className="stat-card" style={{ padding: '1.5rem', background: 'rgba(20,20,20,0.4)', border: '1px solid rgba(255, 69, 58, 0.3)' }}>
-                <h3 style={{fontSize: '0.8rem'}}>Reclaimable Wasted</h3>
-                <p className="stat-value highlight" style={{ fontSize: '2rem', background: 'linear-gradient(135deg, #ff453a, #ff9f0a)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                  {(scanResult.analytics.reclaimable_space_bytes / (1024 * 1024)).toFixed(1)}<span style={{fontSize: '0.9rem', marginLeft: '4px'}}>MB</span>
+              {/* Chart 4: Space Reclaimed Over Time */}
+              <TiltCard className="glass-panel" style={{ display: 'flex', flexDirection: 'column', padding: '2rem' }}>
+                <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <CheckCircle size={18} color="#32d74b"/> Space Reclaimed Over Time
+                </h3>
+                <div style={{ height: '260px', flexGrow: 1, position: 'relative' }}>
+                  {historicalReclaimedData.length < 3 ? (
+                    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
+                      <TrendingUp size={48} style={{ marginBottom: '1rem', opacity: 0.2 }} />
+                      <div style={{ textAlign: 'center', maxWidth: '80%' }}>Run a few more scans to see your progress over time</div>
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={historicalReclaimedData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                        <XAxis dataKey="date" stroke="rgba(255,255,255,0.4)" fontSize={11} tickLine={false} axisLine={false} />
+                        <YAxis stroke="rgba(255,255,255,0.4)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}M`} />
+                        <Tooltip formatter={(value) => `${value} MB`} cursor={{stroke: 'rgba(255,255,255,0.1)'}} contentStyle={{ backgroundColor: 'rgba(15,15,15,0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', backdropFilter: 'blur(10px)', color: 'white' }} />
+                        <defs>
+                          <linearGradient id="colorArea" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#32d74b" stopOpacity={0.4}/>
+                            <stop offset="95%" stopColor="#32d74b" stopOpacity={0.0}/>
+                          </linearGradient>
+                        </defs>
+                        <Area type="monotone" dataKey="mbReclaimed" stroke="#32d74b" strokeWidth={3} fillOpacity={1} fill="url(#colorArea)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </TiltCard>
+                </div>
+
+                {chartFilter && (
+                  <div className="fade-in glass-panel" style={{ padding: '2rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+                  <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    Filtered Results: <span style={{ color: 'var(--brand-primary)' }}>{chartFilter.value}</span>
+                  </h3>
+                  <div style={{ display: 'flex', gap: '1rem' }}>
+                    <button className="btn btn-ghost" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => {
+                      const newSelection = new Set(selectedFiles);
+                      filteredFiles.forEach(f => newSelection.add(f.path));
+                      setSelectedFiles(newSelection);
+                    }}>
+                      Select All
+                    </button>
+                    <button className="btn btn-ghost" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', background: 'rgba(255, 69, 58, 0.15)', color: '#ff453a' }} onClick={() => setChartFilter(null)}>
+                      Clear filter ✕
+                    </button>
+                  </div>
+                </div>
+                <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <ul className="file-list" style={{ maxHeight: '400px', overflowY: 'auto', paddingRight: '0.5rem' }}>
+                    {filteredFiles.slice(0, 100).map((f, i) => <FileItem key={i} f={f} />)}
+                  </ul>
+                  {filteredFiles.length > 100 && <div style={{textAlign:'center', padding:'1rem', color:'var(--text-muted)'}}>Showing first 100 of {filteredFiles.length} files...</div>}
+                  {filteredFiles.length === 0 && <div style={{textAlign:'center', padding:'1rem', color:'var(--text-muted)'}}>No files found for this category.</div>}
+                </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Right Section: Vertical Stats Column */}
+              <div style={{ flex: '1 1 250px', maxWidth: '300px', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+              <TiltCard className="stat-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '1.5rem', background: 'rgba(20,20,20,0.4)', border: '1px solid rgba(255, 69, 58, 0.3)' }}>
+                <h3 style={{fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem'}}>Reclaimable Wasted</h3>
+                <p className="stat-value highlight" style={{ fontSize: '2.5rem', margin: 0, background: 'linear-gradient(135deg, #ff453a, #ff9f0a)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                  <AnimatedCounter value={scanResult.analytics.reclaimable_space_bytes / (1024 * 1024)} decimals={1} suffix={<span style={{fontSize: '1rem', marginLeft: '4px'}}>MB</span>} />
                 </p>
               </TiltCard>
-              <TiltCard className="stat-card" style={{ padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
-                <h3 style={{fontSize: '0.8rem'}}>Total Scanned Files</h3>
-                <p className="stat-value" style={{ fontSize: '2rem' }}>{scanResult.analytics.total_files.toLocaleString()}</p>
+              <TiltCard className="stat-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
+                <h3 style={{fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem'}}>Total Scanned Files</h3>
+                <p className="stat-value" style={{ fontSize: '2.2rem', margin: 0 }}><AnimatedCounter value={scanResult.analytics.total_files} /></p>
               </TiltCard>
-              <TiltCard className="stat-card" style={{ padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
-                <h3 style={{fontSize: '0.8rem'}}>Exact Duplicates</h3>
-                <p className="stat-value" style={{ fontSize: '2rem' }}>{scanResult.analytics.duplicate_groups_count}</p>
+              <TiltCard className="stat-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
+                <h3 style={{fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem'}}>Exact Duplicates</h3>
+                <p className="stat-value" style={{ fontSize: '2.2rem', margin: 0 }}><AnimatedCounter value={scanResult.analytics.duplicate_groups_count} /></p>
               </TiltCard>
-              <TiltCard className="stat-card" style={{ padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
-                <h3 style={{fontSize: '0.8rem'}}>Visual Duplicates</h3>
-                <p className="stat-value" style={{ fontSize: '2rem' }}>{scanResult.analytics.near_duplicate_groups_count}</p>
+              <TiltCard className="stat-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '1.5rem', background: 'rgba(20,20,20,0.4)' }}>
+                <h3 style={{fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem'}}>Visual Duplicates</h3>
+                <p className="stat-value" style={{ fontSize: '2.2rem', margin: 0 }}><AnimatedCounter value={scanResult.analytics.near_duplicate_groups_count} /></p>
               </TiltCard>
+              </div>
             </div>
           </motion.div>
         )}
@@ -995,6 +1330,74 @@ export default function Dashboard() {
         )}
 
         {/* Feature Stubs */}
+        {activeNav === 'trash' && (
+          <div className="fade-in">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
+              <h2>Recently Deleted</h2>
+              {recentlyDeleted.length > 0 && (
+                <button 
+                  className="btn btn-danger" 
+                  onClick={async () => {
+                    if (!window.confirm("Are you sure you want to permanently delete all these files?")) return;
+                    try {
+                      setIsDeleting(true);
+                      const response = await fetch('http://127.0.0.1:5000/api/delete', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ files: recentlyDeleted.map(f => f.path) }),
+                      });
+                      const data = await response.json();
+                      if (!response.ok) throw new Error(data.error || 'Delete failed');
+                      setRecentlyDeleted([]);
+                      showToast(`Permanently deleted ${data.deleted_count} files!`);
+                    } catch (err) {
+                      alert("Delete error: " + err.message);
+                    } finally {
+                      setIsDeleting(false);
+                    }
+                  }}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? 'Deleting...' : 'Permanently Delete Now'}
+                </button>
+              )}
+            </div>
+            
+            {recentlyDeleted.length === 0 ? (
+              <div style={{ color: 'var(--text-muted)' }}>No files staged for deletion.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {recentlyDeleted.map((file, idx) => {
+                  const daysLeft = Math.max(0, 7 - Math.floor((Date.now() - file.deletedAt) / (1000 * 60 * 60 * 24)));
+                  return (
+                    <TiltCard key={idx} className="glass-panel" style={{ padding: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: '4px solid var(--danger)' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                          <span style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{file.filename}</span>
+                          <span style={{ background: 'rgba(255, 69, 58, 0.15)', color: '#ff453a', padding: '0.2rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>
+                            Permanently deletes in {daysLeft} days
+                          </span>
+                        </div>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{file.path}</span>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{(file.size / 1024).toFixed(1)} KB</span>
+                      </div>
+                      <button 
+                        className="btn btn-ghost"
+                        onClick={() => {
+                          setRecentlyDeleted(prev => prev.filter(f => f.path !== file.path));
+                          showToast("File restored. Rescan directory to see it in duplicates.");
+                        }}
+                      >
+                        Restore
+                      </button>
+                    </TiltCard>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {activeNav === 'categorize' && (
           <div className="fade-in glass-panel" style={{textAlign: 'center', padding: '4rem 2rem'}}>
             <FolderTree size={48} color="var(--brand-primary)" style={{marginBottom: '1rem'}} />
@@ -1081,7 +1484,7 @@ export default function Dashboard() {
       {selectedCount > 0 && (
         <div className="action-bar fade-in">
           <div style={{fontSize: '0.95rem', fontWeight: 500}}>
-            Reclaim <span style={{color: 'var(--danger)', fontWeight: 'bold'}}>{(selectedSize / (1024 * 1024)).toFixed(2)} MB</span>
+            Reclaim <span style={{color: 'var(--danger)', fontWeight: 'bold'}}><AnimatedCounter value={selectedSize / (1024 * 1024)} decimals={2} suffix=" MB" /></span>
           </div>
           <button className="btn btn-danger" onClick={() => setIsModalOpen(true)}>
             <Trash2 size={16} /> Delete Selected
@@ -1107,7 +1510,7 @@ export default function Dashboard() {
                 <div>
                   <h3 style={{margin: 0, fontSize: '1.2rem', color: 'var(--text-main)'}}>Delete Selected Files?</h3>
                   <div style={{color: 'var(--danger)', fontWeight: 'bold', fontSize: '0.9rem', marginTop: '0.2rem'}}>
-                    Saving {(selectedSize / (1024 * 1024)).toFixed(2)} MB of space
+                    Saving <AnimatedCounter value={selectedSize / (1024 * 1024)} decimals={2} suffix=" MB" /> of space
                   </div>
                 </div>
               </div>
