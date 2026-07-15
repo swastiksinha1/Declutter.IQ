@@ -1,191 +1,47 @@
 import React, { useRef, useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Float, Sparkles, Box, Cylinder, RoundedBox, Html } from '@react-three/drei';
-import { FileText, Music, FolderOpen, AlertTriangle, Image as ImageIcon, Video } from 'lucide-react';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
-import { motion, AnimatePresence } from 'framer-motion';
 import * as THREE from 'three';
+import { motion, AnimatePresence } from 'framer-motion';
+import LandingHero from '../components/LandingHero';
 
-// Constants for timing
-const ORBIT_DUR = 3.0;
-const COLLAPSE_DUR = 1.0;
-const BOOM_TIME = ORBIT_DUR + COLLAPSE_DUR; // 4.0s
+const PHASE1_DUR = 2.5; // Chaos
+const PHASE2_DUR = 2.5; // Organizing
+const BOOM_TIME = PHASE1_DUR + PHASE2_DUR; // 5.0s
 
-function CameraController() {
-  const { camera } = useThree();
-  
-  useFrame((state) => {
-    const t = state.clock.elapsedTime;
-    
-    if (t < ORBIT_DUR) {
-      // Slow pan
-      camera.position.x = Math.sin(t * 0.2) * 2;
-      camera.position.y = 2 + Math.cos(t * 0.2) * 1;
-      camera.position.z = 10;
-      camera.lookAt(0, 0, 0);
-    } else if (t >= ORBIT_DUR && t < BOOM_TIME) {
-      // Dramatic Zoom In
-      const progress = (t - ORBIT_DUR) / COLLAPSE_DUR;
-      camera.position.lerp(new THREE.Vector3(0, 0, 4), progress * 0.1);
-      camera.lookAt(0, 0, 0);
-    } else {
-      // Boom Shake
-      const timeSinceBoom = t - BOOM_TIME;
-      if (timeSinceBoom < 0.5) {
-        // Smooth sine wave shake that damps over 0.5s
-        const intensity = (0.5 - timeSinceBoom) * 1.5; 
-        camera.position.x = Math.sin(t * 50) * intensity;
-        camera.position.y = Math.cos(t * 45) * intensity;
-        camera.position.z = 4 + Math.sin(t * 40) * intensity;
-      } else {
-        // Settle back to default
-        camera.position.lerp(new THREE.Vector3(0, 2, 10), 0.05);
-      }
-      camera.lookAt(0, 0, 0);
-    }
-  });
-  return null;
-}
-
-function DynamicLighting() {
-  const lightRef = useRef();
-  const ambientRef = useRef();
-  
-  useFrame((state) => {
-    const t = state.clock.elapsedTime;
-    
-    if (t < ORBIT_DUR) {
-      if (ambientRef.current) ambientRef.current.intensity = 0.4;
-      if (lightRef.current) lightRef.current.intensity = 2;
-    } else if (t >= ORBIT_DUR && t < BOOM_TIME) {
-      // Dim lights for the collapse
-      const progress = (t - ORBIT_DUR) / COLLAPSE_DUR;
-      if (ambientRef.current) ambientRef.current.intensity = Math.max(0, 0.4 - progress * 0.4);
-      if (lightRef.current) lightRef.current.intensity = Math.max(0, 2 - progress * 2);
-    } else {
-      // Flash at Boom
-      const timeSinceBoom = t - BOOM_TIME;
-      if (timeSinceBoom < 0.2) {
-        if (ambientRef.current) ambientRef.current.intensity = 5; // Blinding flash
-        if (lightRef.current) lightRef.current.intensity = 10;
-      } else {
-        // Fade back to normal
-        if (ambientRef.current) ambientRef.current.intensity = THREE.MathUtils.lerp(ambientRef.current.intensity, 0.4, 0.05);
-        if (lightRef.current) lightRef.current.intensity = THREE.MathUtils.lerp(lightRef.current.intensity, 2, 0.05);
-      }
-    }
-  });
-
-  return (
-    <>
-      <ambientLight ref={ambientRef} intensity={0.4} />
-      <directionalLight position={[10, 10, 5]} intensity={1.5} color="#9d4edd" />
-      <pointLight ref={lightRef} position={[-10, -10, -10]} intensity={2} color="#5e6ad2" />
-    </>
-  );
-}
-
-function FloatingFile({ initialPosition, color, speed, radiusOffset, iconType, filename }) {
-  const mesh = useRef();
-  
-  useFrame((state) => {
-    if (!mesh.current) return;
-    const t = state.clock.elapsedTime;
-    
-    if (t < ORBIT_DUR) {
-      const angle = (t * speed * 0.3) + initialPosition[0];
-      const radius = 3 + radiusOffset + Math.sin(t * speed * 0.5) * 1.5;
-      mesh.current.position.x = Math.cos(angle) * radius;
-      mesh.current.position.z = Math.sin(angle) * radius;
-      mesh.current.position.y = initialPosition[1] + Math.sin(t * speed) * 0.5;
-      mesh.current.rotation.x = Math.cos(t * speed) * 0.5;
-      mesh.current.rotation.y = Math.sin(t * speed) * 0.5;
-      mesh.current.scale.set(1, 1, 1);
-    } else if (t >= ORBIT_DUR && t < BOOM_TIME) {
-      const progress = (t - ORBIT_DUR) / COLLAPSE_DUR; 
-      const easeProgress = Math.pow(progress, 2);
-      mesh.current.position.lerp(new THREE.Vector3(0, 0, 0), easeProgress * 0.4);
-      mesh.current.rotation.x += speed * 0.3;
-      mesh.current.rotation.y += speed * 0.3;
-      const scale = Math.max(0, 1 - Math.pow(progress, 4));
-      mesh.current.scale.set(scale, scale, scale);
-    } else {
-      mesh.current.scale.set(0, 0, 0);
-    }
-  });
-
-  return (
-    <RoundedBox ref={mesh} position={initialPosition} args={[1.0, 1.4, 0.02]} radius={0.05} smoothness={2}>
-      <meshStandardMaterial 
-        color={color} 
-        transparent={true}
-        opacity={0.8}
-        metalness={0.9} 
-        roughness={0.1} 
-      />
-      {/* Front Icon and Text */}
-      <Html transform position={[0, 0, 0.03]} distanceFactor={4}>
-        <div style={{ color: 'white', opacity: 0.9, filter: 'drop-shadow(0 0 15px rgba(255,255,255,0.6))', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          {iconType === 'file' && <FileText size={64} strokeWidth={1.5} />}
-          {iconType === 'audio' && <Music size={64} strokeWidth={1.5} />}
-          {iconType === 'folder' && <FolderOpen size={64} strokeWidth={1.5} />}
-          {iconType === 'spam' && <AlertTriangle size={64} strokeWidth={1.5} color="var(--danger)" />}
-          {iconType === 'image' && <ImageIcon size={64} strokeWidth={1.5} />}
-          {iconType === 'video' && <Video size={64} strokeWidth={1.5} />}
-          <div style={{ marginTop: '0.8rem', fontSize: '0.45rem', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', background: 'rgba(0,0,0,0.3)', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
-            {filename}
-          </div>
-        </div>
-      </Html>
-    </RoundedBox>
-  );
-}
-
-function CentralHub() {
-  const mesh = useRef();
-  
-  useFrame((state) => {
-    if (!mesh.current) return;
-    const t = state.clock.elapsedTime;
-    
-    mesh.current.rotation.y += 0.005;
-    mesh.current.rotation.z = Math.sin(t * 0.5) * 0.1;
-    
-    if (t < BOOM_TIME) {
-      mesh.current.scale.set(0, 0, 0);
-    } else {
-      const progress = Math.min((t - BOOM_TIME) * 3, 1); 
-      const scale = 1 * (1 - Math.pow(1 - progress, 3)); 
-      mesh.current.scale.set(scale, scale, scale);
-    }
-  });
-
-  return (
-    <Float speed={2} rotationIntensity={0.5} floatIntensity={1}>
-      <Cylinder ref={mesh} args={[1.2, 0.8, 1.5, 32]} position={[0, -0.5, 0]}>
-        <meshStandardMaterial color="#9d4edd" roughness={0.3} metalness={0.7} wireframe emissive="#9d4edd" emissiveIntensity={2} />
-      </Cylinder>
-    </Float>
-  );
-}
-
-function ExplosiveSparkles() {
+function DataParticles() {
+  const count = 600;
   const mesh = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
-  const count = 400;
-  
+
+  // Pre-calculate target grid positions and random initial positions
   const particles = useMemo(() => {
     const temp = [];
+    const gridSize = Math.ceil(Math.pow(count, 1/3));
+    const spacing = 0.8;
+    const offset = (gridSize * spacing) / 2;
+
     for (let i = 0; i < count; i++) {
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos((Math.random() * 2) - 1);
-      const speed = Math.random() * 20 + 10; 
-      
-      const dx = Math.sin(phi) * Math.cos(theta);
-      const dy = Math.sin(phi) * Math.sin(theta);
-      const dz = Math.cos(phi);
-      temp.push({ dx, dy, dz, speed });
+      // Chaotic starting position
+      const startX = (Math.random() - 0.5) * 20;
+      const startY = (Math.random() - 0.5) * 20;
+      const startZ = (Math.random() - 0.5) * 20;
+
+      // Target grid position
+      const x = (i % gridSize) * spacing - offset;
+      const y = (Math.floor(i / gridSize) % gridSize) * spacing - offset;
+      const z = (Math.floor(i / (gridSize * gridSize))) * spacing - offset;
+
+      // Determine if this is a "duplicate" (will be dissolved)
+      const isDuplicate = Math.random() > 0.3; // 70% are duplicates
+
+      temp.push({ 
+        startX, startY, startZ, 
+        targetX: x, targetY: y, targetZ: z, 
+        isDuplicate,
+        randomSpeed: Math.random() * 2 + 0.5
+      });
     }
     return temp;
   }, [count]);
@@ -193,45 +49,93 @@ function ExplosiveSparkles() {
   useFrame((state) => {
     if (!mesh.current) return;
     const t = state.clock.elapsedTime;
-    
-    if (t < BOOM_TIME) {
-      mesh.current.visible = false;
-      return;
-    }
-    mesh.current.visible = true;
-    
-    const timeSinceBoom = t - BOOM_TIME;
+
     particles.forEach((p, i) => {
-      // Explode outwards rapidly, then settle at a maximum distance
-      const explodeDistance = p.speed * (1 - Math.exp(-timeSinceBoom * 3.0)); 
-      
-      // Add a slow, gentle drift after they settle
-      const driftX = Math.sin(timeSinceBoom * 0.5 + p.speed) * 0.5;
-      const driftY = Math.cos(timeSinceBoom * 0.4 + p.speed) * 0.5;
-      const driftZ = Math.sin(timeSinceBoom * 0.6 + p.speed) * 0.5;
-      
-      dummy.position.set(
-        p.dx * explodeDistance + driftX, 
-        p.dy * explodeDistance + driftY, 
-        p.dz * explodeDistance + driftZ
-      );
-      
-      // Start at scale 1.0 during explosion, settle at scale 0.4 forever
-      const scale = 0.4 + 0.6 * Math.exp(-timeSinceBoom * 2.0);
+      let x, y, z;
+      let scale = 1.0;
+      let rotation = 0;
+
+      if (t < PHASE1_DUR) {
+        // Phase 1: Chaos - slowly drifting
+        x = p.startX + Math.sin(t * p.randomSpeed) * 2;
+        y = p.startY + Math.cos(t * p.randomSpeed) * 2;
+        z = p.startZ + Math.sin(t * p.randomSpeed * 0.8) * 2;
+        rotation = t * p.randomSpeed;
+      } else if (t < BOOM_TIME) {
+        // Phase 2: Organizing - lerping to grid
+        const progress = (t - PHASE1_DUR) / PHASE2_DUR;
+        // Easing function (cubic in-out)
+        const ease = progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+        
+        const currentDriftX = Math.sin(PHASE1_DUR * p.randomSpeed) * 2;
+        const currentDriftY = Math.cos(PHASE1_DUR * p.randomSpeed) * 2;
+        const currentDriftZ = Math.sin(PHASE1_DUR * p.randomSpeed * 0.8) * 2;
+
+        x = THREE.MathUtils.lerp(p.startX + currentDriftX, p.targetX, ease);
+        y = THREE.MathUtils.lerp(p.startY + currentDriftY, p.targetY, ease);
+        z = THREE.MathUtils.lerp(p.startZ + currentDriftZ, p.targetZ, ease);
+        rotation = THREE.MathUtils.lerp(PHASE1_DUR * p.randomSpeed, 0, ease);
+      } else {
+        // Phase 3: Cleanup - dissolving duplicates
+        x = p.targetX;
+        y = p.targetY;
+        z = p.targetZ;
+        
+        if (p.isDuplicate) {
+          const dissolveProgress = Math.min((t - BOOM_TIME) * 2, 1);
+          scale = 1.0 - dissolveProgress;
+        } else {
+          // Highlight unique files
+          scale = 1.0 + Math.sin(t * 2 + i) * 0.1;
+        }
+      }
+
+      dummy.position.set(x, y, z);
+      dummy.rotation.set(rotation, rotation, rotation);
       dummy.scale.set(scale, scale, scale);
-      
       dummy.updateMatrix();
       mesh.current.setMatrixAt(i, dummy.matrix);
     });
+
     mesh.current.instanceMatrix.needsUpdate = true;
+    
+    // Smoothly rotate the whole grid
+    mesh.current.rotation.y = t * 0.1;
+    mesh.current.rotation.x = Math.sin(t * 0.05) * 0.2;
   });
 
   return (
     <instancedMesh ref={mesh} args={[null, null, count]}>
-      <sphereGeometry args={[0.08, 16, 16]} />
-      <meshBasicMaterial color="#d8b4fe" transparent opacity={0.8} depthWrite={false} blending={THREE.AdditiveBlending} />
+      <boxGeometry args={[0.15, 0.15, 0.15]} />
+      <meshStandardMaterial color="#9d4edd" metalness={0.8} roughness={0.2} emissive="#5e6ad2" emissiveIntensity={0.5} />
     </instancedMesh>
   );
+}
+
+function CinematicCamera() {
+  const { camera } = useThree();
+  
+  useFrame((state) => {
+    const t = state.clock.elapsedTime;
+    
+    if (t < PHASE1_DUR) {
+      // Pan through chaos
+      camera.position.x = Math.sin(t * 0.2) * 5;
+      camera.position.z = 15 - t;
+      camera.lookAt(0, 0, 0);
+    } else if (t < BOOM_TIME) {
+      // Pull back to reveal grid
+      const progress = (t - PHASE1_DUR) / PHASE2_DUR;
+      const ease = 1 - Math.pow(1 - progress, 3);
+      camera.position.lerp(new THREE.Vector3(0, 2, 12), ease * 0.1);
+      camera.lookAt(0, 0, 0);
+    } else {
+      // Steady gentle orbit
+      camera.position.lerp(new THREE.Vector3(0, 2, 12), 0.05);
+      camera.lookAt(0, 0, 0);
+    }
+  });
+  return null;
 }
 
 export default function Landing() {
@@ -239,36 +143,8 @@ export default function Landing() {
   const [phase, setPhase] = useState(1);
 
   useEffect(() => {
-    const timer1 = setTimeout(() => setPhase(2), ORBIT_DUR * 1000);
-    const timer2 = setTimeout(() => setPhase(3), BOOM_TIME * 1000);
-    return () => { clearTimeout(timer1); clearTimeout(timer2); };
-  }, []);
-
-  const files = useMemo(() => {
-    const temp = [];
-    const colors = ['#5e6ad2', '#d8b4fe', '#a5b4fc', '#ff453a', '#ffffff', '#9d4edd'];
-    const types = ['file', 'audio', 'folder', 'spam', 'image', 'video'];
-    const names = {
-        'file': ['report.pdf', 'notes.txt', 'invoice.doc', 'data.csv'],
-        'audio': ['track.mp3', 'podcast.wav', 'beat.flac', 'voice.m4a'],
-        'folder': ['archives', 'backups', 'temp', 'downloads'],
-        'spam': ['cache.tmp', 'system.log', 'old.bak', 'debug.log'],
-        'image': ['photo.jpg', 'screenshot.png', 'vacation.webp', 'meme.gif'],
-        'video': ['movie.mp4', 'recording.avi', 'clip.mov', 'zoom.mp4']
-    };
-    for (let i = 0; i < 35; i++) {
-      const type = types[Math.floor(Math.random() * types.length)];
-      const namePool = names[type];
-      temp.push({
-        initialPosition: [(Math.random() - 0.5) * 12, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 12],
-        color: colors[Math.floor(Math.random() * colors.length)],
-        iconType: type,
-        filename: namePool[Math.floor(Math.random() * namePool.length)],
-        speed: 0.8 + Math.random() * 1.5,
-        radiusOffset: Math.random() * 4
-      });
-    }
-    return temp;
+    const timer = setTimeout(() => setPhase(3), BOOM_TIME * 1000 + 500); // Slight delay for UI fade in
+    return () => clearTimeout(timer);
   }, []);
 
   return (
@@ -276,53 +152,55 @@ export default function Landing() {
       
       {/* 3D Canvas Background */}
       <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 }}>
-        <Canvas camera={{ position: [0, 2, 10], fov: 45 }}>
-          <CameraController />
-          <DynamicLighting />
+        <Canvas camera={{ position: [0, 0, 15], fov: 45 }}>
+          <CinematicCamera />
+          <ambientLight intensity={0.5} />
+          <directionalLight position={[10, 10, 5]} intensity={2} color="#d8b4fe" />
           
           <React.Suspense fallback={null}>
-            <CentralHub />
-            <ExplosiveSparkles />
-            {files.map((props, i) => (
-              <FloatingFile key={i} {...props} />
-            ))}
-            
+            <DataParticles />
             <EffectComposer>
-              <Bloom luminanceThreshold={0} luminanceSmoothing={0.9} height={300} intensity={1.5} />
+              <Bloom luminanceThreshold={0.2} luminanceSmoothing={0.9} height={300} intensity={1.2} />
             </EffectComposer>
           </React.Suspense>
         </Canvas>
       </div>
 
-      {/* Foreground UI - Only visible in Phase 3 */}
+      {/* Foreground UI - Sleek LandingHero integration */}
       <div style={{ 
         position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 10,
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: '12vh',
         pointerEvents: phase === 3 ? 'auto' : 'none'
       }}>
         <AnimatePresence>
           {phase === 3 && (
             <motion.div 
-              initial={{ opacity: 0, y: 50, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ type: "spring", stiffness: 100, damping: 20, delay: 0.2 }}
-              style={{ textAlign: 'center', width: '100%', maxWidth: '800px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 1.5, ease: "easeOut" }}
+              style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}
             >
-              <h1 style={{ margin: '0 0 1rem 0', fontSize: 'clamp(2rem, 5vw, 3.5rem)', fontWeight: 700, color: 'white', textShadow: '0 0 20px rgba(157, 78, 221, 0.5)' }}>
-                Unleash Your Storage
-              </h1>
-              <p style={{ margin: '0 0 2rem 0', color: 'var(--text-muted)', fontSize: '1.2rem' }}>
-                Watch your duplicates disappear in real-time.
-              </p>
-              <button 
-                className="btn btn-primary" 
-                style={{ fontSize: '1.3rem', padding: '1.2rem 3rem', borderRadius: '99px', boxShadow: '0 10px 40px rgba(157, 78, 221, 0.5)', cursor: 'pointer', transition: 'transform 0.2s', pointerEvents: 'auto' }}
-                onClick={() => navigate('/app')}
-                onMouseOver={(e) => e.target.style.transform = 'scale(1.05)'}
-                onMouseOut={(e) => e.target.style.transform = 'scale(1)'}
-              >
-                Let's go do the decluttering 🚀
-              </button>
+              <LandingHero />
+              
+              <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
+                <motion.button 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5, duration: 0.8 }}
+                  className="btn btn-primary" 
+                  style={{ 
+                    fontSize: '1.2rem', padding: '1rem 3rem', borderRadius: '99px', 
+                    boxShadow: '0 10px 40px rgba(157, 78, 221, 0.4)', 
+                    cursor: 'pointer', pointerEvents: 'auto',
+                    background: 'linear-gradient(135deg, #8B5CF6, #6D28D9)',
+                    border: '1px solid rgba(255,255,255,0.1)'
+                  }}
+                  onClick={() => navigate('/app')}
+                  whileHover={{ scale: 1.05, boxShadow: '0 15px 50px rgba(157, 78, 221, 0.6)' }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  Start Decluttering Sequence
+                </motion.button>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
