@@ -5,6 +5,7 @@ import {
   ImageIcon, FileText, CheckCircle, FolderTree, Ghost, 
   Cloud, Sparkles, FolderMinus, Loader, AlertTriangle, ChevronDown, ChevronUp, Wand2, Lock, TrendingUp
 } from 'lucide-react';
+import MemoryGame from '../components/MemoryGame';
 import TiltCard from '../components/TiltCard';
 import ScanVisualizer from '../components/ScanVisualizer';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, AreaChart, Area } from 'recharts';
@@ -12,8 +13,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 import AnimatedCounter from '../components/AnimatedCounter';
 import RippleButton from '../components/RippleButton';
+import CustomCursor from '../components/CustomCursor';
 import SignatureVisual from '../components/SignatureVisual';
-import ScanIcon from '../components/ScanIcon';
+import SlotMachineIcon from '../components/SlotMachineIcon';
 import DuplicatePreviewPopover from '../components/DuplicatePreviewPopover';
 
 function useSessionState(key, initialValue) {
@@ -778,6 +780,12 @@ export default function Dashboard() {
         </div>
       )}
 
+      {isSemanticScanning && (
+        <div className="game-overlay fade-in">
+          <MemoryGame />
+        </div>
+      )}
+
       {previewFile && (
         <div className="game-overlay" onClick={() => setPreviewFile(null)}>
           <div className="fade-in" style={{position: 'relative', maxWidth: '90vw', maxHeight: '90vh'}} onClick={e => e.stopPropagation()}>
@@ -855,6 +863,7 @@ export default function Dashboard() {
       </aside>
 
       <main className="main-content">
+        <CustomCursor isVisible={isHoveringScan} />
         
         <div className="glass-panel" style={{
           marginBottom: (!scanResult && !isScanning && !isSemanticScanning) ? '1.5rem' : '3rem', 
@@ -870,7 +879,9 @@ export default function Dashboard() {
         }}>
           <div 
             className="scan-bar" 
-            style={{ flex: 1, position: 'relative', overflow: 'hidden', minWidth: '300px' }}
+            style={{ flex: 1, position: 'relative', overflow: 'hidden', cursor: isHoveringScan ? 'none' : 'default', minWidth: '300px' }}
+            onMouseEnter={() => setIsHoveringScan(true)}
+            onMouseLeave={() => setIsHoveringScan(false)}
           >
             {isScanning && (
               <motion.div
@@ -894,10 +905,10 @@ export default function Dashboard() {
               value={directory}
               onChange={(e) => setDirectory(e.target.value)}
               className="dir-input"
-              style={{ zIndex: 1, position: 'relative' }}
+              style={{ cursor: isHoveringScan ? 'none' : 'text', zIndex: 1, position: 'relative' }}
             />
-            <RippleButton className="btn btn-primary" onClick={handleScan} disabled={isScanning || isSemanticScanning} style={{ zIndex: 1, cursor: 'pointer' }}>
-              <ScanIcon isScanning={isScanning} isSemantic={false} />
+            <RippleButton className="btn btn-primary" onClick={handleScan} disabled={isScanning || isSemanticScanning} style={{ zIndex: 1, cursor: isHoveringScan ? 'none' : 'pointer' }}>
+              <SlotMachineIcon isScanning={isScanning} isSemantic={false} />
               <span style={{ marginLeft: '0.5rem' }}>{isScanning ? 'Analyzing Files...' : 'Scan Path'}</span>
             </RippleButton>
             <RippleButton 
@@ -905,7 +916,7 @@ export default function Dashboard() {
               onClick={handleSemanticScan} 
               disabled={isScanning || isSemanticScanning || !scanResult}
               style={{
-                zIndex: 1, cursor: scanResult ? 'pointer' : 'default',
+                zIndex: 1, cursor: isHoveringScan ? 'none' : (scanResult ? 'pointer' : 'default'),
                 ...(!scanResult ? {
                   background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(139, 92, 246, 0.03))',
                   color: '#8B5CF6',
@@ -922,7 +933,7 @@ export default function Dashboard() {
               }}
             >
               {isSemanticScanning ? (
-                <ScanIcon isScanning={true} isSemantic={true} />
+                <SlotMachineIcon isScanning={true} isSemantic={true} />
               ) : !scanResult ? (
                 <Lock size={18} opacity={0.6} />
               ) : (

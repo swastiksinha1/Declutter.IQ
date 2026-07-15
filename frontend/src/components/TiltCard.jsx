@@ -10,8 +10,8 @@ export default function TiltCard({ children, style, className }) {
   const mouseXSpring = useSpring(x, { stiffness: 300, damping: 40 });
   const mouseYSpring = useSpring(y, { stiffness: 300, damping: 40 });
 
-  const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], ["2deg", "-2deg"]);
-  const rotateY = useTransform(mouseXSpring, [-0.5, 0.5], ["-2deg", "2deg"]);
+  const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], ["7.5deg", "-7.5deg"]);
+  const rotateY = useTransform(mouseXSpring, [-0.5, 0.5], ["-7.5deg", "7.5deg"]);
 
   const handleMouseMove = (e) => {
     if (!ref.current) return;
@@ -50,7 +50,7 @@ export default function TiltCard({ children, style, className }) {
       whileHover={{ scale: 1.02, zIndex: 10 }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
     >
-      <div style={{ transform: "translateZ(5px)", width: "100%", height: "100%" }}>
+      <div style={{ transform: "translateZ(30px)", width: "100%", height: "100%" }}>
         {children}
       </div>
     </motion.div>
