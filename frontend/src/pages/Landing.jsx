@@ -101,14 +101,14 @@ function FloatingFile({ initialPosition, color, speed, radiusOffset, iconType, f
       mesh.current.position.y = initialPosition[1] + Math.sin(t * speed) * 0.5;
       mesh.current.rotation.x = Math.cos(t * speed) * 0.5;
       mesh.current.rotation.y = Math.sin(t * speed) * 0.5;
-      mesh.current.scale.set(1, 1, 1);
+      mesh.current.scale.set(0.5, 0.5, 0.5); // Made them smaller
     } else if (t >= ORBIT_DUR && t < BOOM_TIME) {
       const progress = (t - ORBIT_DUR) / COLLAPSE_DUR; 
       const easeProgress = Math.pow(progress, 2);
       mesh.current.position.lerp(new THREE.Vector3(0, 0, 0), easeProgress * 0.4);
       mesh.current.rotation.x += speed * 0.3;
       mesh.current.rotation.y += speed * 0.3;
-      const scale = Math.max(0, 1 - Math.pow(progress, 4));
+      const scale = Math.max(0, 0.5 - Math.pow(progress, 4) * 0.5); // Kept smaller scale
       mesh.current.scale.set(scale, scale, scale);
     } else {
       mesh.current.scale.set(0, 0, 0);
@@ -116,7 +116,7 @@ function FloatingFile({ initialPosition, color, speed, radiusOffset, iconType, f
   });
 
   return (
-    <RoundedBox ref={mesh} position={initialPosition} args={[1.0, 1.4, 0.02]} radius={0.05} smoothness={2}>
+    <RoundedBox ref={mesh} position={initialPosition} args={[1.2, 0.9, 0.05]} radius={0.05} smoothness={2}>
       <meshStandardMaterial 
         color={color} 
         transparent={true}
@@ -125,7 +125,7 @@ function FloatingFile({ initialPosition, color, speed, radiusOffset, iconType, f
         roughness={0.1} 
       />
       {/* Front Icon and Text */}
-      <Html transform position={[0, 0, 0.03]} distanceFactor={4}>
+      <Html transform position={[0, 0, 0.03]} distanceFactor={2}>
         <div style={{ color: 'white', opacity: 0.9, filter: 'drop-shadow(0 0 15px rgba(255,255,255,0.6))', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           {iconType === 'file' && <FileText size={64} strokeWidth={1.5} />}
           {iconType === 'audio' && <Music size={64} strokeWidth={1.5} />}
