@@ -1,7 +1,8 @@
 import React, { useRef, useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Billboard, Image } from '@react-three/drei';
+import { Float, Sparkles, Box, Cylinder, RoundedBox, Html } from '@react-three/drei';
+import { FileText, Music, FolderOpen, AlertTriangle, Image as ImageIcon, Video } from 'lucide-react';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as THREE from 'three';
@@ -29,8 +30,18 @@ function CameraController() {
       camera.position.lerp(new THREE.Vector3(0, 0, 4), progress * 0.1);
       camera.lookAt(0, 0, 0);
     } else {
-      // Settle back to default (Removed Boom Shake)
-      camera.position.lerp(new THREE.Vector3(0, 2, 10), 0.05);
+      // Boom Shake
+      const timeSinceBoom = t - BOOM_TIME;
+      if (timeSinceBoom < 0.5) {
+        // Smooth sine wave shake that damps over 0.5s
+        const intensity = (0.5 - timeSinceBoom) * 1.5; 
+        camera.position.x = Math.sin(t * 50) * intensity;
+        camera.position.y = Math.cos(t * 45) * intensity;
+        camera.position.z = 4 + Math.sin(t * 40) * intensity;
+      } else {
+        // Settle back to default
+        camera.position.lerp(new THREE.Vector3(0, 2, 10), 0.05);
+      }
       camera.lookAt(0, 0, 0);
     }
   });
@@ -45,28 +56,37 @@ function DynamicLighting() {
     const t = state.clock.elapsedTime;
     
     if (t < ORBIT_DUR) {
-      if (ambientRef.current) ambientRef.current.intensity = 0.8;
+      if (ambientRef.current) ambientRef.current.intensity = 0.4;
       if (lightRef.current) lightRef.current.intensity = 2;
     } else if (t >= ORBIT_DUR && t < BOOM_TIME) {
+      // Dim lights for the collapse
       const progress = (t - ORBIT_DUR) / COLLAPSE_DUR;
-      if (ambientRef.current) ambientRef.current.intensity = Math.max(0, 0.8 - progress * 0.5);
-      if (lightRef.current) lightRef.current.intensity = Math.max(0, 2 - progress * 1.5);
+      if (ambientRef.current) ambientRef.current.intensity = Math.max(0, 0.4 - progress * 0.4);
+      if (lightRef.current) lightRef.current.intensity = Math.max(0, 2 - progress * 2);
     } else {
-      if (ambientRef.current) ambientRef.current.intensity = THREE.MathUtils.lerp(ambientRef.current.intensity, 0.8, 0.05);
-      if (lightRef.current) lightRef.current.intensity = THREE.MathUtils.lerp(lightRef.current.intensity, 2, 0.05);
+      // Flash at Boom
+      const timeSinceBoom = t - BOOM_TIME;
+      if (timeSinceBoom < 0.2) {
+        if (ambientRef.current) ambientRef.current.intensity = 5; // Blinding flash
+        if (lightRef.current) lightRef.current.intensity = 10;
+      } else {
+        // Fade back to normal
+        if (ambientRef.current) ambientRef.current.intensity = THREE.MathUtils.lerp(ambientRef.current.intensity, 0.4, 0.05);
+        if (lightRef.current) lightRef.current.intensity = THREE.MathUtils.lerp(lightRef.current.intensity, 2, 0.05);
+      }
     }
   });
 
   return (
     <>
-      <ambientLight ref={ambientRef} intensity={0.8} />
-      <directionalLight position={[10, 10, 5]} intensity={1.5} color="#ffffff" />
-      <pointLight ref={lightRef} position={[-10, -10, -10]} intensity={2} color="#ffffff" />
+      <ambientLight ref={ambientRef} intensity={0.4} />
+      <directionalLight position={[10, 10, 5]} intensity={1.5} color="#9d4edd" />
+      <pointLight ref={lightRef} position={[-10, -10, -10]} intensity={2} color="#5e6ad2" />
     </>
   );
 }
 
-function FloatingIcon({ initialPosition, speed, radiusOffset, iconUrl }) {
+function FloatingFile({ initialPosition, color, speed, radiusOffset, iconType, filename }) {
   const mesh = useRef();
   
   useFrame((state) => {
@@ -79,12 +99,16 @@ function FloatingIcon({ initialPosition, speed, radiusOffset, iconUrl }) {
       mesh.current.position.x = Math.cos(angle) * radius;
       mesh.current.position.z = Math.sin(angle) * radius;
       mesh.current.position.y = initialPosition[1] + Math.sin(t * speed) * 0.5;
-      mesh.current.scale.set(1.5, 1.5, 1.5); // Good size for Billboard icons
+      mesh.current.rotation.x = Math.cos(t * speed) * 0.5;
+      mesh.current.rotation.y = Math.sin(t * speed) * 0.5;
+      mesh.current.scale.set(1, 1, 1);
     } else if (t >= ORBIT_DUR && t < BOOM_TIME) {
       const progress = (t - ORBIT_DUR) / COLLAPSE_DUR; 
       const easeProgress = Math.pow(progress, 2);
       mesh.current.position.lerp(new THREE.Vector3(0, 0, 0), easeProgress * 0.4);
-      const scale = Math.max(0, 1.5 - Math.pow(progress, 4) * 1.5);
+      mesh.current.rotation.x += speed * 0.3;
+      mesh.current.rotation.y += speed * 0.3;
+      const scale = Math.max(0, 1 - Math.pow(progress, 4));
       mesh.current.scale.set(scale, scale, scale);
     } else {
       mesh.current.scale.set(0, 0, 0);
@@ -92,9 +116,121 @@ function FloatingIcon({ initialPosition, speed, radiusOffset, iconUrl }) {
   });
 
   return (
-    <Billboard ref={mesh} position={initialPosition} follow={true} lockX={false} lockY={false} lockZ={false}>
-      <Image url={iconUrl} transparent opacity={0.9} />
-    </Billboard>
+    <RoundedBox ref={mesh} position={initialPosition} args={[1.0, 1.4, 0.02]} radius={0.05} smoothness={2}>
+      <meshStandardMaterial 
+        color={color} 
+        transparent={true}
+        opacity={0.8}
+        metalness={0.9} 
+        roughness={0.1} 
+      />
+      {/* Front Icon and Text */}
+      <Html transform position={[0, 0, 0.03]} distanceFactor={4}>
+        <div style={{ color: 'white', opacity: 0.9, filter: 'drop-shadow(0 0 15px rgba(255,255,255,0.6))', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          {iconType === 'file' && <FileText size={64} strokeWidth={1.5} />}
+          {iconType === 'audio' && <Music size={64} strokeWidth={1.5} />}
+          {iconType === 'folder' && <FolderOpen size={64} strokeWidth={1.5} />}
+          {iconType === 'spam' && <AlertTriangle size={64} strokeWidth={1.5} color="var(--danger)" />}
+          {iconType === 'image' && <ImageIcon size={64} strokeWidth={1.5} />}
+          {iconType === 'video' && <Video size={64} strokeWidth={1.5} />}
+          <div style={{ marginTop: '0.8rem', fontSize: '0.45rem', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', background: 'rgba(0,0,0,0.3)', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
+            {filename}
+          </div>
+        </div>
+      </Html>
+    </RoundedBox>
+  );
+}
+
+function CentralHub() {
+  const mesh = useRef();
+  
+  useFrame((state) => {
+    if (!mesh.current) return;
+    const t = state.clock.elapsedTime;
+    
+    mesh.current.rotation.y += 0.005;
+    mesh.current.rotation.z = Math.sin(t * 0.5) * 0.1;
+    
+    if (t < BOOM_TIME) {
+      mesh.current.scale.set(0, 0, 0);
+    } else {
+      const progress = Math.min((t - BOOM_TIME) * 3, 1); 
+      const scale = 1 * (1 - Math.pow(1 - progress, 3)); 
+      mesh.current.scale.set(scale, scale, scale);
+    }
+  });
+
+  return (
+    <Float speed={2} rotationIntensity={0.5} floatIntensity={1}>
+      <Cylinder ref={mesh} args={[1.2, 0.8, 1.5, 32]} position={[0, -0.5, 0]}>
+        <meshStandardMaterial color="#9d4edd" roughness={0.3} metalness={0.7} wireframe emissive="#9d4edd" emissiveIntensity={2} />
+      </Cylinder>
+    </Float>
+  );
+}
+
+function ExplosiveSparkles() {
+  const mesh = useRef();
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const count = 400;
+  
+  const particles = useMemo(() => {
+    const temp = [];
+    for (let i = 0; i < count; i++) {
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos((Math.random() * 2) - 1);
+      const speed = Math.random() * 20 + 10; 
+      
+      const dx = Math.sin(phi) * Math.cos(theta);
+      const dy = Math.sin(phi) * Math.sin(theta);
+      const dz = Math.cos(phi);
+      temp.push({ dx, dy, dz, speed });
+    }
+    return temp;
+  }, [count]);
+
+  useFrame((state) => {
+    if (!mesh.current) return;
+    const t = state.clock.elapsedTime;
+    
+    if (t < BOOM_TIME) {
+      mesh.current.visible = false;
+      return;
+    }
+    mesh.current.visible = true;
+    
+    const timeSinceBoom = t - BOOM_TIME;
+    particles.forEach((p, i) => {
+      // Explode outwards rapidly, then settle at a maximum distance
+      const explodeDistance = p.speed * (1 - Math.exp(-timeSinceBoom * 3.0)); 
+      
+      // Add a slow, gentle drift after they settle
+      const driftX = Math.sin(timeSinceBoom * 0.5 + p.speed) * 0.5;
+      const driftY = Math.cos(timeSinceBoom * 0.4 + p.speed) * 0.5;
+      const driftZ = Math.sin(timeSinceBoom * 0.6 + p.speed) * 0.5;
+      
+      dummy.position.set(
+        p.dx * explodeDistance + driftX, 
+        p.dy * explodeDistance + driftY, 
+        p.dz * explodeDistance + driftZ
+      );
+      
+      // Start at scale 1.0 during explosion, settle at scale 0.4 forever
+      const scale = 0.4 + 0.6 * Math.exp(-timeSinceBoom * 2.0);
+      dummy.scale.set(scale, scale, scale);
+      
+      dummy.updateMatrix();
+      mesh.current.setMatrixAt(i, dummy.matrix);
+    });
+    mesh.current.instanceMatrix.needsUpdate = true;
+  });
+
+  return (
+    <instancedMesh ref={mesh} args={[null, null, count]}>
+      <sphereGeometry args={[0.08, 16, 16]} />
+      <meshBasicMaterial color="#d8b4fe" transparent opacity={0.8} depthWrite={false} blending={THREE.AdditiveBlending} />
+    </instancedMesh>
   );
 }
 
@@ -108,21 +244,26 @@ export default function Landing() {
     return () => { clearTimeout(timer1); clearTimeout(timer2); };
   }, []);
 
-  const icons = useMemo(() => {
+  const files = useMemo(() => {
     const temp = [];
-    const iconUrls = [
-      'https://img.icons8.com/color/512/folder-invoices.png', // Folder
-      'https://img.icons8.com/color/512/vlc.png', // VLC
-      'https://img.icons8.com/color/512/pdf.png', // PDF
-      'https://img.icons8.com/color/512/microsoft-word-2019.png', // Word
-      'https://img.icons8.com/color/512/image.png', // Image
-      'https://img.icons8.com/color/512/mp3.png' // MP3
-    ];
-    
-    for (let i = 0; i < 40; i++) {
+    const colors = ['#5e6ad2', '#d8b4fe', '#a5b4fc', '#ff453a', '#ffffff', '#9d4edd'];
+    const types = ['file', 'audio', 'folder', 'spam', 'image', 'video'];
+    const names = {
+        'file': ['report.pdf', 'notes.txt', 'invoice.doc', 'data.csv'],
+        'audio': ['track.mp3', 'podcast.wav', 'beat.flac', 'voice.m4a'],
+        'folder': ['archives', 'backups', 'temp', 'downloads'],
+        'spam': ['cache.tmp', 'system.log', 'old.bak', 'debug.log'],
+        'image': ['photo.jpg', 'screenshot.png', 'vacation.webp', 'meme.gif'],
+        'video': ['movie.mp4', 'recording.avi', 'clip.mov', 'zoom.mp4']
+    };
+    for (let i = 0; i < 35; i++) {
+      const type = types[Math.floor(Math.random() * types.length)];
+      const namePool = names[type];
       temp.push({
         initialPosition: [(Math.random() - 0.5) * 12, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 12],
-        iconUrl: iconUrls[Math.floor(Math.random() * iconUrls.length)],
+        color: colors[Math.floor(Math.random() * colors.length)],
+        iconType: type,
+        filename: namePool[Math.floor(Math.random() * namePool.length)],
         speed: 0.8 + Math.random() * 1.5,
         radiusOffset: Math.random() * 4
       });
@@ -140,13 +281,14 @@ export default function Landing() {
           <DynamicLighting />
           
           <React.Suspense fallback={null}>
-            {/* Removed CentralHub and ExplosiveSparkles */}
-            {icons.map((props, i) => (
-              <FloatingIcon key={i} {...props} />
+            <CentralHub />
+            <ExplosiveSparkles />
+            {files.map((props, i) => (
+              <FloatingFile key={i} {...props} />
             ))}
             
             <EffectComposer>
-              <Bloom luminanceThreshold={0.5} luminanceSmoothing={0.9} height={300} intensity={0.5} />
+              <Bloom luminanceThreshold={0} luminanceSmoothing={0.9} height={300} intensity={1.5} />
             </EffectComposer>
           </React.Suspense>
         </Canvas>
