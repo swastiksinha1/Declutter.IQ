@@ -178,6 +178,11 @@ export default function Dashboard() {
   const [newName, setNewName] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
   
+  // Settings State
+  const [maxFiles, setMaxFiles] = useSessionState('declutter_max_files', 20000);
+  const [exclusions, setExclusions] = useSessionState('declutter_exclusions', '.git, node_modules, venv, .venv, AppData, Windows, Program Files, Program Files (x86)');
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  
   // Feature States
   const [zombies, setZombies] = useState(null);
   const [categorizeResult, setCategorizeResult] = useState(null);
@@ -209,7 +214,11 @@ export default function Dashboard() {
       const response = await fetch('http://127.0.0.1:5000/api/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ directory }),
+        body: JSON.stringify({ 
+          directory, 
+          max_files: maxFiles, 
+          exclusions: exclusions.split(',').map(s => s.trim()).filter(Boolean)
+        }),
       });
       
       const data = await response.json();
@@ -406,23 +415,34 @@ export default function Dashboard() {
         if (semanticResult) semanticResult.semantic_duplicates.forEach(addGroup);
       }
 
-      stageForDeletion(filesToStage);
+      const pathsToDelete = filesToStage.map(f => f.path);
       
+      const response = await fetch('http://127.0.0.1:5000/api/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files: pathsToDelete })
+      });
+      
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Delete failed');
+
+      // Update UI state
+      stageForDeletion(filesToStage);
       setIsModalOpen(false);
-      const reclaimedSpace = filesToStage.reduce((acc, f) => acc + f.size, 0);
-      setToast(`Staged ${filesToStage.length} files in Recently Deleted! Reclaimed ${(reclaimedSpace / (1024*1024)).toFixed(2)} MB.`);
+      
+      setToast(`Moved ${data.deleted_count} files to Trash! Reclaimed ${(data.reclaimed_space_bytes / (1024*1024)).toFixed(2)} MB.`);
       setTimeout(() => setToast(''), 5000);
       
       setSessionStats(prev => ({
         ...prev,
-        spaceReclaimedBytes: prev.spaceReclaimedBytes + reclaimedSpace
+        spaceReclaimedBytes: prev.spaceReclaimedBytes + data.reclaimed_space_bytes
       }));
       
       const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       setReclaimHistory(prev => {
         const newHistory = [...prev];
         const todayEntryIndex = newHistory.findIndex(entry => entry.date === today);
-        const reclaimedMB = reclaimedSpace / (1024 * 1024);
+        const reclaimedMB = data.reclaimed_space_bytes / (1024 * 1024);
         if (todayEntryIndex >= 0) {
           newHistory[todayEntryIndex] = {
             ...newHistory[todayEntryIndex],
@@ -741,6 +761,25 @@ export default function Dashboard() {
         </div>
       )}
 
+      {isSettingsOpen && (
+        <div className="game-overlay fade-in" onClick={() => setIsSettingsOpen(false)}>
+          <div className="glass-panel" style={{ width: '400px', padding: '2rem' }} onClick={e => e.stopPropagation()}>
+            <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Settings size={20} /> Settings</h2>
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-muted)' }}>Max Files to Scan</label>
+              <input type="number" className="dir-input" value={maxFiles} onChange={e => setMaxFiles(Number(e.target.value))} style={{ width: '100%', padding: '0.8rem' }} />
+            </div>
+            <div style={{ marginBottom: '2rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-muted)' }}>Excluded Folders (comma separated)</label>
+              <textarea className="dir-input" value={exclusions} onChange={e => setExclusions(e.target.value)} style={{ width: '100%', padding: '0.8rem', minHeight: '100px', resize: 'vertical' }} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn btn-primary" onClick={() => setIsSettingsOpen(false)}>Save & Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isSemanticScanning && (
         <div className="game-overlay fade-in">
           <MemoryGame />
@@ -798,13 +837,12 @@ export default function Dashboard() {
 
         <div className="nav-section" style={{marginTop: '2rem'}}>Tools</div>
         <div className="nav-links">
-          <div className={`nav-item ${activeNav === 'trash' ? 'active' : ''}`} onClick={() => setActiveNav('trash')}>
+          <div className={`nav-item ${activeNav === 'trash' ? 'active' : ''}`} onClick={() => setActiveNav('trash')} style={{color: recentlyDeleted.length > 0 ? 'var(--danger)' : 'inherit'}}>
             <Trash2 size={18} /> <span>Recently Deleted</span>
-            {recentlyDeleted.length > 0 && (
-              <div style={{marginLeft: 'auto', background: 'rgba(255, 69, 58, 0.2)', color: '#ff453a', padding: '2px 8px', borderRadius: '99px', fontSize: '0.7rem', fontWeight: 600}}>
-                {recentlyDeleted.length}
-              </div>
-            )}
+            {recentlyDeleted.length > 0 && <div style={{marginLeft: 'auto', background: 'var(--danger)', color: 'white', padding: '2px 8px', borderRadius: '99px', fontSize: '0.7rem', fontWeight: 600}}>{recentlyDeleted.length}</div>}
+          </div>
+          <div className="nav-item" onClick={() => setIsSettingsOpen(true)}>
+            <Settings size={18} /> <span>Settings</span>
           </div>
           <div className={`nav-item ${activeNav === 'categorize' ? 'active' : ''}`} onClick={() => setActiveNav('categorize')}>
             <FolderTree size={18} /> <span>Auto-Categorize</span>

@@ -23,13 +23,15 @@ def get_default_directory():
 def run_scan():
     data = request.json
     directory = data.get('directory')
+    max_files = data.get('max_files', 20000)
+    exclusions = data.get('exclusions', None)
     
     if not directory:
         return jsonify({"error": "Directory path is required"}), 400
         
     try:
         # 1. Scan directory
-        files_metadata = list(scan_directory(directory))
+        files_metadata = list(scan_directory(directory, max_files=max_files, exclude_dirs=exclusions))
         
         # 2. Find exact duplicates
         exact_duplicates = find_exact_duplicates(files_metadata)

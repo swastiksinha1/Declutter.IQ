@@ -49,9 +49,9 @@ def find_semantic_duplicates(metadata_list, threshold=0.95):
     image_exts = {'.jpg', '.jpeg', '.png', '.webp', '.bmp'}
     text_exts = {'.txt', '.pdf', '.docx', '.doc'}
     
-    # Cap files to prevent CPU overload/long wait times during demo
-    images = [m for m in metadata_list if m['extension'].lower() in image_exts][:50]
-    docs = [m for m in metadata_list if m['extension'].lower() in text_exts][:50]
+    # Remove hard cap, but still only process images and documents
+    images = [m for m in metadata_list if m['extension'].lower() in image_exts]
+    docs = [m for m in metadata_list if m['extension'].lower() in text_exts]
     
     semantic_groups = []
     
@@ -59,22 +59,33 @@ def find_semantic_duplicates(metadata_list, threshold=0.95):
     if images:
         model = get_clip_model()
         try:
-            pil_images = []
             valid_images = []
-            for img in images:
-                try:
-                    # Open and aggressively downscale to CLIP's native size to save memory/decode time
-                    pil_img = Image.open(img['path'])
-                    if pil_img.mode != 'RGB':
-                        pil_img = pil_img.convert('RGB')
-                    pil_img.thumbnail((224, 224))
-                    pil_images.append(pil_img)
-                    valid_images.append(img)
-                except Exception:
-                    pass
+            embeddings_list = []
             
-            if pil_images:
-                embeddings = model.encode(pil_images, batch_size=8, convert_to_tensor=True, show_progress_bar=False)
+            # Batch load and encode to prevent OOM
+            batch_size = 32
+            for i in range(0, len(images), batch_size):
+                batch_images = images[i:i+batch_size]
+                pil_images = []
+                current_valid = []
+                for img in batch_images:
+                    try:
+                        pil_img = Image.open(img['path'])
+                        if pil_img.mode != 'RGB':
+                            pil_img = pil_img.convert('RGB')
+                        pil_img.thumbnail((224, 224))
+                        pil_images.append(pil_img)
+                        current_valid.append(img)
+                    except Exception:
+                        pass
+                
+                if pil_images:
+                    batch_embeddings = model.encode(pil_images, batch_size=8, convert_to_tensor=True, show_progress_bar=False)
+                    embeddings_list.append(batch_embeddings)
+                    valid_images.extend(current_valid)
+            
+            if embeddings_list:
+                embeddings = torch.cat(embeddings_list, dim=0)
                 cosine_scores = util.cos_sim(embeddings, embeddings)
                 
                 visited = set()
@@ -103,17 +114,29 @@ def find_semantic_duplicates(metadata_list, threshold=0.95):
     # 2. Text Semantic Grouping
     if docs:
         model = get_text_model()
-        doc_texts = []
-        valid_docs = []
-        for doc in docs:
-            txt = extract_text(doc['path'])
-            if len(txt.strip()) > 20:
-                doc_texts.append(txt)
-                valid_docs.append(doc)
+        try:
+            valid_docs = []
+            embeddings_list = []
+            
+            # Batch process documents
+            batch_size = 64
+            for i in range(0, len(docs), batch_size):
+                batch_docs = docs[i:i+batch_size]
+                doc_texts = []
+                current_valid = []
+                for doc in batch_docs:
+                    txt = extract_text(doc['path'])
+                    if len(txt.strip()) > 20:
+                        doc_texts.append(txt)
+                        current_valid.append(doc)
                 
-        if doc_texts:
-            try:
-                embeddings = model.encode(doc_texts, batch_size=16, convert_to_tensor=True, show_progress_bar=False)
+                if doc_texts:
+                    batch_embeddings = model.encode(doc_texts, batch_size=16, convert_to_tensor=True, show_progress_bar=False)
+                    embeddings_list.append(batch_embeddings)
+                    valid_docs.extend(current_valid)
+                
+            if embeddings_list:
+                embeddings = torch.cat(embeddings_list, dim=0)
                 cosine_scores = util.cos_sim(embeddings, embeddings)
                 
                 visited = set()
@@ -136,7 +159,7 @@ def find_semantic_duplicates(metadata_list, threshold=0.95):
                             "files": group,
                             "redundant_space": sum(f['size'] for f in group[1:])
                         })
-            except Exception as e:
-                print(f"Text semantic error: {e}")
-                
+        except Exception as e:
+            print(f"Text semantic error: {e}")
+            
     return semantic_groups
