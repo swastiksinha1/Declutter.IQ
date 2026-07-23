@@ -48,3 +48,4 @@ Declutter.IQ is an intelligent, full-stack application designed to help you anal
 - Refine the user experience and UI.
 - Enhance semantic search capabilities.
 - Add one-click auto-organization.
+- Making a new landing page
